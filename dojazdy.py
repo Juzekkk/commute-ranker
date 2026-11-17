@@ -147,6 +147,10 @@ def page_details(ad):
         "deposit": values.get("deposit"), "freeFrom": values.get("free_from"),
         "lift": {"::y": True, "::n": False}.get((lift or [None])[0]),  # brak informacji: None
         "extras": groups.get("Informacje dodatkowe", []), "equipment": groups.get("Wyposażenie", []),
+        # wszystkie zdjęcia (wyniki wyszukiwania mają tylko kilka) i rzut z osobnego pola Otodom
+        "photos": [image.get("large") or image.get("medium") for image in ad.get("images") or []
+                   if image.get("large") or image.get("medium")],
+        "plan": dig(ad, "links", "localPlanUrl") or None,
     }
 
 
@@ -489,6 +493,8 @@ def write_json(rows, places, place_cols, summary):
 
 
 def main():
+    if not CONFIG_FILE.exists():
+        sys.exit("Brak config.toml. Skopiuj config.example.toml do config.toml i uzupełnij go (opis w README.md).")
     config = tomllib.loads(CONFIG_FILE.read_text(encoding="utf-8-sig"))
     api_key = config["google"]["api_key"]
     if not api_key:
@@ -568,8 +574,9 @@ def main():
         })
         rows.append(row)
     rows.sort(key=lambda row: row[WEEK])
-    # parametry z karty mają tylko oferty pobrane tą wersją; starsze uzupełniamy, ale tylko z rankingu
-    fetch_details([row["id"] for row in rows if "details" not in cache[row["id"]]], candidates, cache)
+    # parametry i zdjęcia z karty mają tylko oferty pobrane tą wersją; starsze uzupełniamy, ale tylko z rankingu
+    fetch_details([row["id"] for row in rows if "photos" not in (cache[row["id"]].get("details") or {})],
+                  candidates, cache)
     for row in rows:
         row["details"] = cache[row["id"]].get("details")
 

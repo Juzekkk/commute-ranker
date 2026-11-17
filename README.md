@@ -67,13 +67,13 @@ flowchart LR
 
 Ranking liczy łączny czas w drodze w tygodniu: dla każdego miejsca czas dojazdu w jedną stronę × 2 × `razy_w_tygodniu`. Czasy i trasy dotyczą przyjazdu w najbliższy wtorek o 9:00, według rzeczywistych rozkładów.
 
-Na stronie `mapa.html` lista ofert stoi obok mapy, a numery ofert są wspólne dla listy i mapy. Po kliknięciu oferty pojawiają się:
+Na stronie `mapa.html` lista ofert stoi obok mapy, a numery ofert są wspólne dla listy i mapy. Szerokość listy zmienisz, przeciągając jej krawędź; podwójne kliknięcie przywraca domyślną. Po kliknięciu oferty albo strzałki po jej prawej stronie pojawiają się:
 
-- **Szczegóły:** zdjęcie, piętro z windą, stan, budynek, ogrzewanie, ogłoszeniodawca, data dodania, dodatki.
+- **Szczegóły:** galeria wszystkich zdjęć (kliknięcie w lewą lub prawą połowę zdjęcia przewija), pod nią rzut mieszkania, jeśli ogłoszeniodawca go dodał, a dalej piętro z windą, stan, budynek, ogrzewanie, ogłoszeniodawca, data dodania, dodatki.
 - **Dojazdy:** najszybszy wariant do każdego miejsca, a pod linkiem pozostałe. Najechanie rysuje trasę na mapie, kliknięcie rozpisuje przesiadki.
 - **Okolica:** najbliższe miejsce każdego rodzaju w promieniu 1 km, dla metra i kolei 2 km.
 
-Oferty można zaznaczać i filtrować: wszystkie, zaznaczone, nowe od ostatniego uruchomienia. Zaznaczenia zapamiętuje przeglądarka.
+Strzałka zwija ofertę i czyści mapę. Kliknięcie numeru oferty ją zaznacza, a filtry pokazują wszystkie, zaznaczone albo nowe od ostatniego uruchomienia. Zaznaczenia i szerokość listy zapamiętuje przeglądarka.
 
 ## ⚙️ Konfiguracja
 
@@ -109,7 +109,7 @@ Wszystkie są w `.gitignore`, bo zawierają dane pobrane z sieci albo Twoje wyni
 
 | Plik | Zawartość | Tworzy |
 | --- | --- | --- |
-| `stan.json` | Współrzędne, rok budowy i parametry ofert, żeby nie otwierać ich kart ponownie | `dojazdy.py` |
+| `stan.json` | Współrzędne, rok budowy, parametry, zdjęcia i rzut ofert, żeby nie otwierać ich kart ponownie | `dojazdy.py` |
 | `czasy.json` | Czasy dojazdu (30 dni) i licznik zapytań o czasy | `dojazdy.py` |
 | `trasy.json` | Warianty tras (30 dni) i licznik zapytań o trasy | `dojazdy.py` |
 | `wyniki.md`, `wyniki.csv`, `wyniki.json` | Ranking: do czytania, do Excela, dla strony | `dojazdy.py` |
