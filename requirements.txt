@@ -1,0 +1,4 @@
+requests==2.34.2
+tzdata==2026.6
+osmium==4.3.2
+

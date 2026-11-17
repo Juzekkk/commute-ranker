@@ -1,0 +1,32 @@
+# Twoje ustawienia (zawierają klucz Google API); szablon: config.example.toml
+config.toml
+
+# Pamięć podręczna i liczniki zapytań tworzone przez dojazdy.py
+stan.json
+czasy.json
+trasy.json
+
+# Dane okolicy z okolica.py (wycinek OpenStreetMap ma kilkaset MB)
+*.osm.pbf
+*.osm.pbf.part
+okolica.json
+
+# Wyniki
+wyniki.csv
+wyniki.md
+wyniki.json
+mapa.html
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Systemy i edytory
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,51 @@
+# Szablon ustawień. Skopiuj ten plik do config.toml i uzupełnij:
+#   Windows:      copy config.example.toml config.toml
+#   macOS/Linux:  cp config.example.toml config.toml
+# config.toml jest w .gitignore, bo zawiera Twój klucz Google API.
+
+# WYSZUKIWANIE
+# Ustaw filtry na otodom.pl w przeglądarce (wynajem/sprzedaż, cena, metraż,
+# pokoje, dzielnice), a potem wklej tu adres strony z wynikami.
+# Im węższe wyszukiwanie, tym szybciej działa pierwsze uruchomienie.
+otodom_url = "https://www.otodom.pl/pl/wyniki/wynajem/mieszkanie/mazowieckie/warszawa/warszawa/warszawa?priceMax=5000&roomsNumber=%5BTWO%2CTHREE%5D"
+# Jeśli w ogóle nie chcesz ofert deweloperskich, ustaw na Otodom filtr "Rynek: wtórny".
+
+# FILTRY
+# Oferty bez ceny skrypt pomija zawsze.
+# max_rok_budowy: pomiń oferty z rokiem budowy (a inwestycje z terminem oddania)
+#   późniejszym niż ten rok. Usuń linię, jeśli nie chcesz tego filtra.
+[filtry]
+max_rok_budowy = 2027
+
+# GOOGLE MAPS (Routes API)
+# Klucz tworzysz w Google Cloud Console (console.cloud.google.com): nowy projekt,
+# podpięte konto rozliczeniowe, włączone "Routes API", potem
+# "Dane logowania" -> "Utwórz dane logowania" -> "Klucz interfejsu API".
+[google]
+api_key = ""
+
+# TWOJE MIEJSCA (przykładowe, podmień na swoje)
+# wspolrzedne: w Google Maps kliknij prawym przyciskiem w miejsce, potem kliknij
+#   w liczby na górze menu. Skopiują się dokładnie w takim formacie.
+# razy_w_tygodniu: ile razy w tygodniu tam jeździsz. To jest waga: ranking
+#   sumuje czas w drodze w ciągu tygodnia (tam i z powrotem).
+# max_minut (opcjonalne): odrzuć oferty, z których dojazd w jedną stronę
+#   trwa dłużej. Usuń tę linię, jeśli nie chcesz limitu.
+# Czasy liczone są dla przyjazdu we wtorek o 9:00. Dla wizyt wieczornych
+#   i weekendowych to przybliżenie.
+
+[[miejsca]]
+nazwa = "Praca"
+wspolrzedne = "52.2302, 20.9836"
+razy_w_tygodniu = 5
+max_minut = 40
+
+[[miejsca]]
+nazwa = "Rodzice"
+wspolrzedne = "52.1311, 21.0657"
+razy_w_tygodniu = 1
+
+[[miejsca]]
+nazwa = "Siłownia"
+wspolrzedne = "52.2196, 21.0147"
+razy_w_tygodniu = 2
