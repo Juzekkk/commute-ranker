@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-Ranking ofert z Otodom według czasu dojazdu komunikacją miejską.
+Ranking ofert z portali (Otodom, Nieruchomości Online) według czasu dojazdu komunikacją miejską.
 
-1. Pobiera wszystkie oferty z wyszukiwania Otodom (adres w config.toml) i od razu
-   odrzuca oferty bez ceny oraz inwestycje z terminem oddania po max_rok_budowy.
-2. Dla ofert, których jeszcze nie zna, odczytuje z karty ogłoszenia współrzędne
-   i rok budowy (zapamiętuje je w stan.json) i odrzuca zbyt późne roczniki.
+1. Zbiera oferty z wyszukiwań z config.toml (oferty.py, a ten korzysta z otodom.py i
+   nieruchomosci_online.py) i od razu odrzuca oferty bez ceny oraz inwestycje z terminem oddania
+   po max_rok_budowy. Gdy portal zwraca błędy (np. 429), pobieranie jest skracane (siec.py):
+   skrypt idzie dalej z tym, co już ma, i opisuje braki w podsumowaniu.
+2. Dla ofert, których jeszcze nie zna, odczytuje z karty ogłoszenia współrzędne i rok budowy
+   (zapamiętuje je w stan.json) i odrzuca zbyt późne roczniki oraz oferty z obszarów wykluczonych
+   na mapie (wykluczenia.json): dla nich nie liczy czasów ani tras i nie zapisuje zdjęć.
 3. Liczy czas dojazdu do Twoich miejsc przez Google Routes API (przyjazd we wtorek
    o 9:00) i zapamiętuje go w czasy.json na 30 dni według współrzędnych, więc oferty
    w tym samym budynku liczą się raz. Miejsca z max_minut idą pierwsze: oferta, która
@@ -13,41 +16,39 @@ Ranking ofert z Otodom według czasu dojazdu komunikacją miejską.
    darmowego miesięcznego limitu Google.
 4. Dla ofert z rankingu pobiera z Google do 3 wariantów przejazdu do każdego miejsca
    (linie, przesiadki, godziny, kształt trasy) i zapamiętuje je w trasy.json na 30 dni.
-5. Sortuje po tygodniowym czasie w drodze i zapisuje ranking do wyniki.md (do czytania),
-   wyniki.csv (do Excela) i wyniki.json (dane dla mapa.py).
+5. Scala duplikaty z różnych portali, sortuje po tygodniowym czasie w drodze i zapisuje ranking
+   do wyniki.md (do czytania), wyniki.csv (do Excela) i wyniki.json (dane dla mapa.py).
 
-Uruchomienie: python dojazdy.py
+Uruchomienie:
+  python dojazdy.py                    wszystkie wyszukiwania z [wyszukiwania] w config.toml
+  python dojazdy.py otodom-m olx-d     tylko wybrane (nazwy z config.toml); reszta z poprzedniego pobrania
 """
 
 import csv
 import json
-import random
-import re
+import math
 import sys
 import time
 import tomllib
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
 import requests
 
+import oferty
+import otodom
+import siec
+
 HERE = Path(__file__).resolve().parent
 CONFIG_FILE = HERE / "config.toml"
-CACHE_FILE = HERE / "stan.json"
 TIMES_FILE = HERE / "czasy.json"
 ROUTES_FILE = HERE / "trasy.json"
 CSV_FILE = HERE / "wyniki.csv"
 MD_FILE = HERE / "wyniki.md"
 JSON_FILE = HERE / "wyniki.json"
 
-OTODOM_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Accept-Language": "pl-PL,pl;q=0.9,en;q=0.8",
-}
 GOOGLE_URL = "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix"
 # Google liczy opłatę za każdą parę punkt-miejsce; 10 000 par miesięcznie jest za darmo.
 MONTHLY_LIMIT = 9000
@@ -60,11 +61,7 @@ ROUTES_MONTHLY_LIMIT = 9000
 WARSAW = ZoneInfo("Europe/Warsaw")
 # darmowy limit Google odnawia się 1. dnia miesiąca o północy czasu pacyficznego (u nas ok. 9:00)
 GOOGLE_BILLING_TZ = ZoneInfo("America/Los_Angeles")
-ROOMS = {word: n for n, word in enumerate(
-    ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN"], start=1)}
 WEEK = "tydzień w drodze [min]"
-FLOORS = {"CELLAR": "suterena", "GROUND": "parter", "ABOVE_TENTH": "> 10", "GARRET": "poddasze",
-          **{word: str(n) for word, n in ROOMS.items()}}
 
 
 def dig(data, *keys):
@@ -74,133 +71,6 @@ def dig(data, *keys):
             return None
         data = data.get(key)
     return data
-
-
-def pause():
-    time.sleep(random.uniform(1, 2))  # nie zasypujemy Otodomu zapytaniami
-
-
-def fetch(url):
-    """GET z ponowieniami przy błędach sieci, 429 i 5xx. Zwraca odpowiedź albo None."""
-    for attempt in range(4):
-        try:
-            response = requests.get(url, headers=OTODOM_HEADERS, timeout=30)
-            if response.status_code != 429 and response.status_code < 500:
-                return response
-        except requests.RequestException:
-            pass
-        time.sleep(5 * (attempt + 1))
-    return None
-
-
-def next_data(response):
-    """JSON z danymi, który Otodom osadza w każdej stronie, albo None."""
-    if response is None or not response.ok:
-        return None
-    match = re.search(r'<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)</script>', response.text, re.S)
-    return json.loads(match.group(1)) if match else None
-
-
-def page_url(search_url, page):
-    """Adres konkretnej strony wyników: widok listy, 72 oferty na stronę."""
-    parts = urlsplit(search_url)
-    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
-             if k not in ("page", "limit", "viewType")]
-    query += [("viewType", "listing"), ("limit", "72"), ("page", str(page))]
-    return urlunsplit(parts._replace(query=urlencode(query)))
-
-
-def search_ads(search_url):
-    """Oferty ze wszystkich stron wyników jako {id: oferta}, bez duplikatów."""
-    ads, page, total_pages = {}, 1, 1
-    while page <= total_pages:
-        response = fetch(page_url(search_url, page))
-        search = dig(next_data(response), "props", "pageProps", "data", "searchAds")
-        if search is None:
-            status = response.status_code if response is not None else "brak odpowiedzi"
-            sys.exit(f"Nie udało się odczytać strony {page} wyników z Otodom (HTTP {status}). "
-                     "Sprawdź adres w config.toml. Jeśli w przeglądarce działa, Otodom mógł "
-                     "zmienić budowę strony albo blokować zapytania.")
-        total_pages = dig(search, "pagination", "totalPages") or 1
-        for item in search.get("items") or []:
-            # inwestycja deweloperska zawiera pasujące lokale w relatedAds,
-            # a przewidywany termin oddania ma zapisany przy sobie
-            delivery_year = dig(item, "investmentEstimatedDelivery", "year")
-            for ad in item.get("relatedAds") or [item]:
-                ads[str(ad["id"])] = {**ad, "deliveryYear": delivery_year}
-        print(f"Wyniki: strona {page}/{total_pages}, ofert: {len(ads)}")
-        page += 1
-        pause()
-    return ads
-
-
-def page_details(ad):
-    """Najważniejsze parametry z karty ogłoszenia, z polskimi opisami takimi jak na Otodom."""
-    values = {c.get("key"): c.get("localizedValue") for c in ad.get("characteristics") or []
-              if c.get("localizedValue")}
-    groups = {g.get("label"): g.get("values") or [] for g in ad.get("featuresByCategory") or []}
-    lift = next((i.get("values") for i in ad.get("additionalInformation") or [] if i.get("label") == "lift"), None)
-    return {
-        "floors": values.get("building_floors_num"), "status": values.get("construction_status"),
-        "market": values.get("market"), "building": values.get("building_type"),
-        "heating": values.get("heating"), "ownership": values.get("building_ownership"),
-        "deposit": values.get("deposit"), "freeFrom": values.get("free_from"),
-        "lift": {"::y": True, "::n": False}.get((lift or [None])[0]),  # brak informacji: None
-        "extras": groups.get("Informacje dodatkowe", []), "equipment": groups.get("Wyposażenie", []),
-        # wszystkie zdjęcia (wyniki wyszukiwania mają tylko kilka) i rzut z osobnego pola Otodom
-        "photos": [image.get("large") or image.get("medium") for image in ad.get("images") or []
-                   if image.get("large") or image.get("medium")],
-        "plan": dig(ad, "links", "localPlanUrl") or None,
-    }
-
-
-def ad_details(ad):
-    """Współrzędne, rok budowy i parametry z karty ogłoszenia albo None, jeśli się nie udało."""
-    data = dig(next_data(fetch(f"https://www.otodom.pl/pl/oferta/{ad['slug']}")),
-               "props", "pageProps", "ad")
-    lat = dig(data, "location", "coordinates", "latitude")
-    lng = dig(data, "location", "coordinates", "longitude")
-    if lat is None or lng is None:
-        return None
-    year = re.search(r"\d{4}", str(dig(data, "target", "Build_year") or ""))
-    return {"lat": lat, "lng": lng,
-            # radius > 0: ogłoszeniodawca ukrył dokładny adres, punkt to środek okręgu
-            "approximate": bool(dig(data, "location", "mapDetails", "radius")),
-            "rok": int(year.group()) if year else None,
-            "details": page_details(data)}
-
-
-def skip_reason(ad, year, max_year):
-    """Powód pominięcia oferty jeszcze przed liczeniem dojazdów albo None."""
-    if not dig(ad, "totalPrice", "value"):
-        return "bez ceny"
-    if max_year and year and year > max_year:
-        return f"rok budowy po {max_year}"
-    return None
-
-
-def fetch_details(ad_ids, ads, cache):
-    """Pobiera karty ogłoszeń i zapisuje w cache współrzędne i rok budowy."""
-    if not ad_ids:
-        return
-    print(f"Pobieram karty {len(ad_ids)} ofert (ok. {max(1, round(len(ad_ids) * 2.5 / 60))} min)...")
-    failures = 0
-    try:
-        for n, ad_id in enumerate(ad_ids, start=1):
-            details = ad_details(ads[ad_id])
-            if details:
-                cache[ad_id] = details
-                failures = 0
-            else:
-                failures += 1
-                if failures >= 10:
-                    print("\n10 ogłoszeń z rzędu bez danych: Otodom chyba blokuje zapytania. "
-                          "Przerywam, spróbuj ponownie później.")
-                    break
-            print(f"  {n}/{len(ad_ids)}", end="\r")
-            pause()
-    finally:  # postęp zostaje zapisany także po przerwaniu (Ctrl+C)
-        CACHE_FILE.write_text(json.dumps(cache), encoding="utf-8")
 
 
 def parse_coords(place):
@@ -398,13 +268,36 @@ def migrate_times(state, cache):
             state["czasy"].setdefault(f"{point_key(cache[ad_id])}@{place}", value)
 
 
+DUPLICATE_RADIUS_M = 60  # to samo mieszkanie na dwóch portalach: ta sama cena, metraż ±1 m², bliski punkt
+
+
+def merge_duplicates(rows):
+    """Oferty z różnych portali, które wyglądają na to samo mieszkanie, scala w jedną (zostaje ta
+    z Otodom, bo ma pełniejsze dane) z odnośnikiem do drugiego portalu. Zwraca (oferty, lista scalonych ofert, które znikają z rankingu)."""
+    kept, merged = [], []
+    for row in rows:
+        def same(other):
+            kx = 111320 * math.cos(math.radians(row["lat"]))
+            return (other["portal"] != row["portal"] and other["cena [zł]"] == row["cena [zł]"]
+                    and abs(float(other["m²"] or 0) - float(row["m²"] or 0)) <= 1
+                    and math.hypot((other["lat"] - row["lat"]) * 110540, (other["lng"] - row["lng"]) * kx)
+                    <= DUPLICATE_RADIUS_M)
+        twin = next((other for other in kept if same(other)), None)
+        if twin is None:
+            kept.append(row)
+            continue
+        winner, loser = (twin, row) if twin["portal"] == otodom.NAME or row["portal"] != otodom.NAME \
+            else (row, twin)
+        if winner is row:
+            kept[kept.index(twin)] = row
+        winner.setdefault("alsoOn", []).append({"portal": loser["portal"], "link": loser["link"]})
+        merged.append(loser)
+    return kept, merged
+
+
 def excerpt(text, limit=300):
     text = " ".join((text or "").split())
     return text if len(text) <= limit else text[:limit].rsplit(" ", 1)[0] + "…"
-
-
-def money(value):
-    return int(value["value"]) if value and value.get("value") else ""
 
 
 def thousands(value):
@@ -485,7 +378,8 @@ def write_json(rows, places, place_cols, summary):
             "floor": row["piętro"] or None, "photo": row["zdjęcie"], "advertiser": row["ogłoszeniodawca"],
             "listed": row["dodane"] or None, "excerpt": row["opis"] or None, "details": row["details"],
             "routes": row["trasy"],
-            "isNew": bool(row["nowa"]), "approximate": row["lokalizacja"] == "przybliżona",
+            "type": row["typ"], "portal": row["portal"], "alsoOn": row.get("alsoOn", []), "isNew": bool(row["nowa"]),
+            "approximate": row["lokalizacja"] == "przybliżona",
             "title": row["tytuł"], "link": row["link"], "lat": row["lat"], "lng": row["lng"],
         } for n, row in enumerate(rows, start=1)],
     }
@@ -501,32 +395,51 @@ def main():
         sys.exit("Uzupełnij api_key w sekcji [google] w config.toml.")
     places = [{**place, "coords": parse_coords(place)} for place in config["miejsca"]]
     max_year = config.get("filtry", {}).get("max_rok_budowy")
+    siec.configure(config.get("pobieranie", {}).get("limit_minut_na_portal"))
 
-    ads = search_ads(config["otodom_url"])
+    entries = oferty.search_entries(config)
+    selected = sys.argv[1:]  # python dojazdy.py otodom-m olx-m: pobierz tylko te wyszukiwania
+    if selected:
+        print(f"Odświeżam tylko: {', '.join(selected)}. Pozostałe wyszukiwania biorę z poprzedniego pobrania.")
+    ads, problems, search_notes = oferty.collect(entries, selected)
+    if not ads:
+        sys.exit("Nie pobrano żadnych ofert. " + " ".join(problems) +
+                 " Sprawdź adresy w config.toml w przeglądarce albo spróbuj ponownie później.")
     skipped = Counter()
+    by_portal = defaultdict(Counter)  # portal -> powód odpadnięcia -> liczba ofert
+
+    def drop(ad, reason, before_commute=True):
+        if before_commute:
+            skipped[reason] += 1
+        by_portal[ad["portal"]][reason] += 1
+
     candidates = {}
     for ad_id, ad in ads.items():  # odsiew bez pobierania karty ogłoszenia
-        reason = skip_reason(ad, ad["deliveryYear"], max_year)
+        reason = oferty.skip_reason(ad, ad["deliveryYear"], max_year)
         if reason:
-            skipped[reason] += 1
+            drop(ad, reason)
         else:
             candidates[ad_id] = ad
 
-    cache = json.loads(CACHE_FILE.read_text(encoding="utf-8")) if CACHE_FILE.exists() else {}
+    zones = oferty.load_zones()
+    cache = oferty.load_cache()
     new = {ad_id for ad_id in candidates if ad_id not in cache}
     # wpisy bez roku budowy pochodzą z poprzedniej wersji skryptu: ich karty pobieramy jeszcze raz
-    fetch_details([ad_id for ad_id in candidates if "rok" not in cache.get(ad_id, {})],
-                  candidates, cache)
+    oferty.fetch_details([ad_id for ad_id in candidates if "rok" not in cache.get(ad_id, {})],
+                         candidates, cache, zones)
 
     located = {}
     for ad_id, ad in candidates.items():
         if ad_id not in cache:
-            skipped["nie udało się pobrać karty"] += 1
+            drop(ad, "nie udało się pobrać karty")
+            continue
+        if oferty.in_zone(cache[ad_id]["lat"], cache[ad_id]["lng"], zones):
+            drop(ad, "w wykluczonym obszarze")
             continue
         ad["rok"] = cache[ad_id].get("rok") or ad["deliveryYear"]
-        reason = skip_reason(ad, ad["rok"], max_year)
+        reason = oferty.skip_reason(ad, ad["rok"], max_year)
         if reason:
-            skipped[reason] += 1
+            drop(ad, reason)
         else:
             located[ad_id] = cache[ad_id]
     if not located:
@@ -545,38 +458,40 @@ def main():
     for ad_id, details in located.items():
         minutes = [state["czasy"].get(time_key(point_key(details), place), [None])[0]
                    for place in places]
+        ad = candidates[ad_id]
         if None in minutes:  # brak połączenia, przekroczony limit innego miejsca albo brak czasu
+            drop(ad, "poza limitem dojazdu albo bez połączenia", before_commute=False)
             continue
         if any(m > place["max_minut"] for m, place in zip(minutes, places) if "max_minut" in place):
+            drop(ad, "poza limitem dojazdu albo bez połączenia", before_commute=False)
             continue
-        ad = candidates[ad_id]
-        price, area = money(ad.get("totalPrice")), ad.get("areaInSquareMeters")
+        price, area = ad["price"], ad["area"]
         row = {WEEK: sum(2 * place.get("razy_w_tygodniu", 1) * m for m, place in zip(minutes, places))}
         row.update(zip(place_cols, minutes))
         row.update({
             "id": ad_id, "lat": details["lat"], "lng": details["lng"],
-            "piętro": FLOORS.get(ad.get("floorNumber"), ""),
-            "zdjęcie": ((ad.get("images") or [{}])[0] or {}).get("medium"),
-            "ogłoszeniodawca": "osoba prywatna" if ad.get("isPrivateOwner")
-                               else dig(ad, "agency", "name") or "biuro lub deweloper",
-            "dodane": (ad.get("dateCreatedFirst") or ad.get("dateCreated") or "")[:10],
-            "opis": excerpt(ad.get("shortDescription")),
+            "typ": ad["type"], "piętro": ad["floor"], "portal": ad["portal"], "zdjęcie": ad["photo"],
+            "ogłoszeniodawca": ad["advertiser"], "dodane": ad["listed"], "opis": excerpt(ad["excerpt"]),
             "cena [zł]": price,
-            "czynsz [zł]": money(ad.get("rentPrice")),
-            "zł/m²": money(ad.get("pricePerSquareMeter")) or (round(price / area) if price and area else ""),
+            "czynsz [zł]": ad["rent"] or "",
+            "zł/m²": ad["pricePerM2"] or (round(price / area) if price and area else ""),
             "m²": round(area) if area else "",
-            "pokoje": ROOMS.get(ad.get("roomsNumber"), ad.get("roomsNumber") or ""),
+            "pokoje": ad["rooms"] or "",
             "rok budowy": ad["rok"] or "",
             "nowa": "TAK" if ad_id in new else "",
             "lokalizacja": "przybliżona" if details["approximate"] else "dokładna",
-            "tytuł": ad.get("title", ""),
-            "link": f"https://www.otodom.pl/pl/oferta/{ad['slug']}",
+            "tytuł": ad["title"],
+            "link": ad["link"],
         })
         rows.append(row)
     rows.sort(key=lambda row: row[WEEK])
+    rows, merged = merge_duplicates(rows)
+    for loser in merged:
+        by_portal[loser["portal"]]["scalone z ofertą z innego portalu"] += 1
     # parametry i zdjęcia z karty mają tylko oferty pobrane tą wersją; starsze uzupełniamy, ale tylko z rankingu
-    fetch_details([row["id"] for row in rows if "photos" not in (cache[row["id"]].get("details") or {})],
-                  candidates, cache)
+    oferty.fetch_details([row["id"] for row in rows
+                          if oferty.stale_details(candidates[row["id"]], cache[row["id"]].get("details"))],
+                         candidates, cache, zones)
     for row in rows:
         row["details"] = cache[row["id"]].get("details")
 
@@ -592,9 +507,22 @@ def main():
 
     used = state["zuzycie"].get(billing_month(), 0)
     skipped_text = ", ".join(f"{reason}: {n}" for reason, n in skipped.items()) or "brak"
+    notes = [f"Uwaga, wyniki mogą być niepełne: {p}." for p in problems]
+    notes += [f"Uwaga, wyniki mogą być niepełne: {p}." for p in siec.problems()
+              if not any(p.split(": ", 1)[1] in text for text in problems)]
+    in_ranking = Counter(row["portal"] for row in rows)
+    portal_lines = []
+    for portal, count in Counter(ad["portal"] for ad in ads.values()).most_common():
+        gone = ", ".join(f"{reason}: {n}" for reason, n in by_portal[portal].most_common())
+        portal_lines.append(f"{portal}: {count} ofert, w rankingu {in_ranking[portal]}"
+                            + (f"; odpadły: {gone}" if gone else "") + ".")
     summary = [
+        *notes,
+        *[f"Wyszukiwanie {note}." for note in search_notes],
         f"Ofert w wyszukiwaniu: {len(ads)}. Pominięte przed liczeniem dojazdów: {skipped_text}.",
-        f"W limitach dojazdu: {len(rows)} z {len(located)} (nowych: {sum(1 for r in rows if r['nowa'])}).",
+        f"W limitach dojazdu: {len(rows)} z {len(located)} (nowych: {sum(1 for r in rows if r['nowa'])})."
+        + (f" Scalone duplikaty z różnych portali: {len(merged)}." if merged else ""),
+        *portal_lines,
         f"Google w tym miesiącu (licznik skryptu): {thousands(used)} z {thousands(MONTHLY_LIMIT)} par "
         "(darmowo do 10 000).",
         f"Google, trasy w tym miesiącu: {thousands(routes_state['zuzycie'].get(billing_month(), 0))} z "

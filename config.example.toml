@@ -6,9 +6,27 @@
 # WYSZUKIWANIE
 # Ustaw filtry na otodom.pl w przeglądarce (wynajem/sprzedaż, cena, metraż,
 # pokoje, dzielnice), a potem wklej tu adres strony z wynikami.
-# Im węższe wyszukiwanie, tym szybciej działa pierwsze uruchomienie.
-otodom_url = "https://www.otodom.pl/pl/wyniki/wynajem/mieszkanie/mazowieckie/warszawa/warszawa/warszawa?priceMax=5000&roomsNumber=%5BTWO%2CTHREE%5D"
-# Jeśli w ogóle nie chcesz ofert deweloperskich, ustaw na Otodom filtr "Rynek: wtórny".
+# Każde wyszukiwanie ma nazwę (klucz) i adres. Adresów może być kilka i mogą pochodzić
+# z różnych portali (otodom.pl, nieruchomosci-online.pl, olx.pl). Portale wyszukują
+# naraz tylko mieszkania albo tylko domy, więc wklej osobny adres dla każdego rodzaju.
+# Oferty ze wszystkich wyszukiwań trafiają do jednego rankingu (duplikaty odpadają).
+# Wszystkie naraz:  python dojazdy.py
+# Wybrane:          python dojazdy.py otodom-m olx-m   (reszta zostaje z poprzedniego pobrania)
+# Nazwy są dowolne (litery, cyfry, myślnik). Im węższe wyszukiwanie, tym szybciej działa.
+[wyszukiwania]
+otodom-m = "https://www.otodom.pl/pl/wyniki/wynajem/mieszkanie/mazowieckie/warszawa/warszawa/warszawa?priceMax=5000&roomsNumber=%5BTWO%2CTHREE%5D"
+otodom-d = "https://www.otodom.pl/pl/wyniki/wynajem/dom/mazowieckie/warszawa/warszawa/warszawa?priceMax=7000"
+# inne portale (odkomentuj, żeby włączyć):
+# nieruchomosci-m = "https://warszawa.nieruchomosci-online.pl/mieszkania,wynajem/"
+# olx-m = "https://www.olx.pl/nieruchomosci/mieszkania/wynajem/warszawa/"
+
+# POBIERANIE
+# Gdy portal zwraca błędy (np. 429 "too many requests"), skrypt robi kilka ponowień,
+# a potem przestaje pytać ten portal i idzie dalej z tym, co już pobrał.
+# limit_minut_na_portal: najdłuższy czas na jeden portal w jednym uruchomieniu
+#   (domyślnie 20). Po jego przekroczeniu skrypt kończy pobieranie z portalu.
+[pobieranie]
+limit_minut_na_portal = 20
 
 # FILTRY
 # Oferty bez ceny skrypt pomija zawsze.

@@ -3,6 +3,7 @@ config.toml
 
 # Pamięć podręczna i liczniki zapytań tworzone przez dojazdy.py
 stan.json
+ogloszenia.json
 czasy.json
 trasy.json
 
@@ -30,3 +31,7 @@ desktop.ini
 .idea/
 .vscode/
 *.swp
+
+# Obszary wykluczone na mapie (Twoje, lokalne)
+wykluczenia.json
+wykluczenia.tmp
