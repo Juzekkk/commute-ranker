@@ -4,7 +4,7 @@ Ranking ofert mieszkań z Otodom według łącznego czasu, który co tydzień sp
 
 Wynik to tabela (Markdown i CSV) oraz strona `mapa.html` z listą ofert obok mapy. Przy każdej ofercie są zdjęcia, rzut, warianty przejazdu z przesiadkami i najbliższe sklepy, przystanki i parki.
 
-![Lista ofert uszeregowana według tygodniowego czasu w drodze, obok mapa Warszawy z ponumerowanymi ofertami i trzema miejscami: Praca, Siłownia, Rodzice](docs/img/lista-i-mapa.jpg)
+![Lista ofert uszeregowana według tygodniowego czasu w drodze, z wyborem sortowania, obok mapa Warszawy z ponumerowanymi ofertami, wspólnym znacznikiem kilku ofert z jednego budynku i trzema miejscami: Praca, Siłownia, Rodzice](docs/img/lista-i-mapa.jpg)
 
 <sub>Wszystkie zrzuty pokazują fikcyjne dane wygenerowane przez <code>docs/mock/generuj_mock.py</code>: oferty, zdjęcia, rzuty i trasy są wymyślone.</sub>
 
@@ -155,11 +155,17 @@ Po kliknięciu oferty mapa przybliża się do niej i rysuje okrąg o promieniu 5
 
 ![Sekcja Okolica: najbliższy supermarket, sklep, metro, kolej, tramwaj, park, siłownia, apteka i paczkomat z odległościami](docs/img/okolica.jpg)
 
-Pozostałe funkcje:
+### Sortowanie i kilka ofert w jednym miejscu
+
+**Sortowanie.** Lista „Sortuj według” nad ofertami układa je według czasu w drodze (domyślnie), ceny, ceny z czynszem, ceny za m² albo daty dodania, od najnowszych. Numery ofert zostają z rankingu dojazdów, więc przy każdym sortowaniu znaczą to samo na liście i na mapie. Oferty bez danego parametru trafiają na koniec, a przy równych wartościach wyżej jest oferta z krótszym dojazdem. Cenę i inne kryteria wyszukiwania zawężasz w `otodom_url`, a strona tylko zmienia kolejność.
+
+**Wspólny znacznik.** Oferty oddalone od siebie o najwyżej 25 m, np. kilka lokali w jednym budynku albo w jednej inwestycji, dzielą na mapie jeden znacznik. Numery są na nim ułożone jak talia kart: do trzech numerów, a przy większej liczbie dwa pierwsze i „+N”. Kolejność numerów na znaczniku jest taka sama jak na liście, a rozwinięta oferta jest na nim zawsze widoczna. Kliknięcie znacznika otwiera listę ofert z tego miejsca z czasem w drodze, ceną, metrażem i liczbą pokoi, a wybór pozycji rozwija ofertę na liście. Karta oferty ma oznaczenie „W tym samym miejscu” z numerami pozostałych.
+
+![Lista posortowana według ceny, a na mapie wspólny znacznik pięciu ofert z jednego budynku na Mokotowie z otwartą listą tych ofert](docs/img/wspolne-miejsce.jpg)
+
+### Pozostałe funkcje
 
 - Kliknięcie numeru oferty ją zaznacza. Filtry u góry pokazują wszystkie oferty, zaznaczone albo nowe.
-- Listę można posortować według czasu w drodze (domyślnie), ceny, ceny z czynszem, ceny za m² albo daty dodania. Numery ofert zostają z rankingu dojazdów, więc na liście i mapie znaczą to samo przy każdym sortowaniu. Oferty bez danego parametru trafiają na koniec.
-- Oferty oddalone od siebie o najwyżej 25 m, np. kilka lokali w jednym budynku, mają na mapie wspólny znacznik z numerami ułożonymi jak talia kart: do trzech numerów, a przy większej liczbie dwa i „+N”. Kliknięcie znacznika otwiera listę tych ofert, a wybór pozycji rozwija ofertę na liście. Karta oferty ma oznaczenie „W tym samym miejscu” z numerami pozostałych.
 - Szerokość listy zmienisz, przeciągając jej krawędź (albo strzałkami na klawiaturze). Podwójne kliknięcie przywraca domyślną.
 - Zaznaczenia, sortowanie i szerokość listy zapamiętuje przeglądarka (`localStorage`), więc zostają po ponownym wygenerowaniu strony.
 - Przełącznik warstw w prawym górnym rogu mapy zmienia podkład na zdjęcia satelitarne.

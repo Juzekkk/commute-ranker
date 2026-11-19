@@ -48,6 +48,16 @@ def main():
             "el => el.scrollIntoView({block: 'start'})")
         settle(page)
         page.screenshot(path=OUT / "okolica.jpg", quality=85)
+
+        # sortowanie po cenie i wspólny znacznik kilku lokali w jednym budynku
+        page.reload()
+        settle(page, 1500)
+        page.select_option("#sort", "price")
+        page.evaluate("map.setView([52.1925, 21.0275], 16)")
+        settle(page)
+        page.locator(".stack").first.click()
+        settle(page, 1000)
+        page.screenshot(path=OUT / "wspolne-miejsce.jpg", quality=85)
         browser.close()
     print(f"Zapisano zrzuty w {OUT}")
 
