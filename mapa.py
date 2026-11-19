@@ -123,18 +123,51 @@ TEMPLATE = r"""<!doctype html>
   .empty { margin: 0; padding: 18px; color: var(--muted); }
   .offer {
     display: grid;
-    grid-template-columns: 30px minmax(0, 1fr) 28px;
-    column-gap: 10px;
-    padding: 12px 12px 12px 12px;
+    grid-template-columns: minmax(0, 1fr) 28px 28px;
+    column-gap: 2px;
+    padding: 12px 8px 12px 14px;
     border-bottom: 1px solid var(--rule);
     border-left: 4px solid transparent;
   }
+  .offer { cursor: pointer; }
+  .offer > section { cursor: auto; }
   .offer.selected { border-left-color: var(--signal); }
   .offer.active { background: var(--active-bg); }
-  .offer > .rank { grid-column: 1; grid-row: 1; align-self: start; }
-  .offer > .show { grid-column: 2; grid-row: 1; }
+  .offer > .show { grid-column: 1; grid-row: 1; }
+  .offer > .pick { grid-column: 2; grid-row: 1; align-self: start; }
   .offer > .collapse { grid-column: 3; grid-row: 1; align-self: start; }
-  .offer > .actions, .offer > section { grid-column: 2 / span 2; }
+  .offer > .actions, .offer > section { grid-column: 1 / -1; }
+  .num {
+    display: inline-grid;
+    place-items: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    margin-right: 8px;
+    border-radius: 11px;
+    vertical-align: 2px;
+    font-size: 12.5px;
+    font-weight: 600;
+    background: var(--text);
+    color: var(--surface);
+  }
+  .offer.selected .num { background: var(--signal); color: var(--on-signal); }
+  .pick {
+    all: unset;
+    box-sizing: border-box;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .pick:hover { background: var(--variant-bg); color: var(--text); }
+  .pick svg { width: 18px; height: 18px; }
+  .pick[aria-pressed="true"] { color: #b88700; }
+  .pick[aria-pressed="true"] svg { fill: var(--signal); }
+  .pick:focus-visible, .collapse:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .show {
     all: unset;
     box-sizing: border-box;
@@ -148,23 +181,6 @@ TEMPLATE = r"""<!doctype html>
     outline-offset: 3px;
     border-radius: 4px;
   }
-  .rank {
-    all: unset;
-    box-sizing: border-box;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    font-size: 13px;
-    font-weight: 600;
-    background: var(--text);
-    color: var(--surface);
-    cursor: pointer;
-  }
-  .rank:hover { box-shadow: 0 0 0 3px var(--signal); }
-  .rank[aria-pressed="true"] { background: var(--signal); color: var(--on-signal); }
-  .rank:focus-visible, .collapse:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .collapse {
     all: unset;
     box-sizing: border-box;
@@ -492,10 +508,11 @@ TEMPLATE = r"""<!doctype html>
         <option value="listed">daty dodania, od najnowszych</option>
       </select>
     </div>
-    <p class="hint">Kliknij ofertę, żeby zobaczyć szczegóły, dojazdy i okolicę na mapie. Numer oferty ją zaznacza, strzałka po prawej zwija. Niebieski krąg ma promień 500 m, czyli ok. 6 minut pieszo. Kilka ofert w jednym miejscu ma wspólny znacznik z kilkoma numerami: kliknij go, żeby zobaczyć listę.</p>
     <details>
-      <summary>Podsumowanie wyszukiwania</summary>
+      <summary>Podsumowanie i podpowiedzi</summary>
       <ul id="summary"></ul>
+      <p class="hint">Kliknij ofertę, żeby ją rozwinąć lub zwinąć. Gwiazdka przy ofercie ją zaznacza, a numer w nagłówku jest tym samym, który widać na mapie. Niebieski krąg ma promień 500 m, ok. 6 minut pieszo. Kilka ofert w jednym miejscu ma wspólny znacznik: kliknij go, żeby zobaczyć listę.</p>
+
     </details>
   </header>
   <p class="empty" id="empty" hidden></p>
@@ -519,7 +536,7 @@ const EMPTY = {
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const numbers = new Intl.NumberFormat("pl-PL");
 // Ikony: Lucide (https://lucide.dev), licencja ISC, Copyright (c) Lucide Contributors
-const ICONS = {"cart": "<path d=\"m2.05 2.05 1.099-.028a1 1 0 0 1 1.008.815l2.69 14.347A1 1 0 0 0 7.83 18H18\" /> <path d=\"M4.563 5h16.435a1 1 0 0 1 .981 1.204l-1.026 6.226A2 2 0 0 1 18.962 14H6.25\" /> <circle cx=\"18\" cy=\"20\" r=\"2\" /> <circle cx=\"8\" cy=\"20\" r=\"2\" />", "store": "<path d=\"M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5\" /> <path d=\"M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244\" /> <path d=\"M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05\" />", "dumbbell": "<path d=\"M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z\" /> <path d=\"m2.5 21.5 1.4-1.4\" /> <path d=\"m20.1 3.9 1.4-1.4\" /> <path d=\"M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z\" /> <path d=\"m9.6 14.4 4.8-4.8\" />", "trees": "<path d=\"M10 10v.2A3 3 0 0 1 8.9 16H5a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z\" /> <path d=\"M7 16v6\" /> <path d=\"M13 19v3\" /> <path d=\"M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .8-1.7L13 3l-1.4 1.5\" />", "train": "<path d=\"M8 3.1V7a4 4 0 0 0 8 0V3.1\" /> <path d=\"m9 15-1-1\" /> <path d=\"m15 15 1-1\" /> <path d=\"M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z\" /> <path d=\"m8 19-2 3\" /> <path d=\"m16 19 2 3\" />", "tram": "<rect width=\"16\" height=\"16\" x=\"4\" y=\"3\" rx=\"2\" /> <path d=\"M4 11h16\" /> <path d=\"M12 3v8\" /> <path d=\"m8 19-2 3\" /> <path d=\"m18 22-2-3\" /> <path d=\"M8 15h.01\" /> <path d=\"M16 15h.01\" />", "pill": "<path d=\"m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z\" /> <path d=\"m8.5 8.5 7 7\" />", "package": "<path d=\"M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z\" /> <path d=\"M12 22V12\" /> <polyline points=\"3.29 7 12 12 20.71 7\" /> <path d=\"m7.5 4.27 9 5.15\" />", "walk": "<path d=\"M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z\" /> <path d=\"M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z\" /> <path d=\"M16 17h4\" /> <path d=\"M4 13h4\" />", "chevron": "<path d=\"m6 9 6 6 6-6\" />"};
+const ICONS = {"house": "<path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\" /> <path d=\"M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\" />", "building": "<path d=\"M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z\" /> <path d=\"M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2\" /> <path d=\"M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2\" /> <path d=\"M10 6h4\" /> <path d=\"M10 10h4\" /> <path d=\"M10 14h4\" /> <path d=\"M10 18h4\" />", "star": "<path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\" />", "moon": "<path d=\"M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401\" />", "sun": "<circle cx=\"12\" cy=\"12\" r=\"4\" /> <path d=\"M12 2v2\" /> <path d=\"M12 20v2\" /> <path d=\"m4.93 4.93 1.41 1.41\" /> <path d=\"m17.66 17.66 1.41 1.41\" /> <path d=\"M2 12h2\" /> <path d=\"M20 12h2\" /> <path d=\"m6.34 17.66-1.41 1.41\" /> <path d=\"m19.07 4.93-1.41 1.41\" />", "cart": "<path d=\"m2.05 2.05 1.099-.028a1 1 0 0 1 1.008.815l2.69 14.347A1 1 0 0 0 7.83 18H18\" /> <path d=\"M4.563 5h16.435a1 1 0 0 1 .981 1.204l-1.026 6.226A2 2 0 0 1 18.962 14H6.25\" /> <circle cx=\"18\" cy=\"20\" r=\"2\" /> <circle cx=\"8\" cy=\"20\" r=\"2\" />", "store": "<path d=\"M15 21v-5a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v5\" /> <path d=\"M17.774 10.31a1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.451 0 1.12 1.12 0 0 0-1.548 0 2.5 2.5 0 0 1-3.452 0 1.12 1.12 0 0 0-1.549 0 2.5 2.5 0 0 1-3.77-3.248l2.889-4.184A2 2 0 0 1 7 2h10a2 2 0 0 1 1.653.873l2.895 4.192a2.5 2.5 0 0 1-3.774 3.244\" /> <path d=\"M4 10.95V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8.05\" />", "dumbbell": "<path d=\"M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z\" /> <path d=\"m2.5 21.5 1.4-1.4\" /> <path d=\"m20.1 3.9 1.4-1.4\" /> <path d=\"M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z\" /> <path d=\"m9.6 14.4 4.8-4.8\" />", "trees": "<path d=\"M10 10v.2A3 3 0 0 1 8.9 16H5a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z\" /> <path d=\"M7 16v6\" /> <path d=\"M13 19v3\" /> <path d=\"M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .8-1.7L13 3l-1.4 1.5\" />", "train": "<path d=\"M8 3.1V7a4 4 0 0 0 8 0V3.1\" /> <path d=\"m9 15-1-1\" /> <path d=\"m15 15 1-1\" /> <path d=\"M9 19c-2.8 0-5-2.2-5-5v-4a8 8 0 0 1 16 0v4c0 2.8-2.2 5-5 5Z\" /> <path d=\"m8 19-2 3\" /> <path d=\"m16 19 2 3\" />", "tram": "<rect width=\"16\" height=\"16\" x=\"4\" y=\"3\" rx=\"2\" /> <path d=\"M4 11h16\" /> <path d=\"M12 3v8\" /> <path d=\"m8 19-2 3\" /> <path d=\"m18 22-2-3\" /> <path d=\"M8 15h.01\" /> <path d=\"M16 15h.01\" />", "pill": "<path d=\"m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z\" /> <path d=\"m8.5 8.5 7 7\" />", "package": "<path d=\"M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z\" /> <path d=\"M12 22V12\" /> <polyline points=\"3.29 7 12 12 20.71 7\" /> <path d=\"m7.5 4.27 9 5.15\" />", "walk": "<path d=\"M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z\" /> <path d=\"M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z\" /> <path d=\"M16 17h4\" /> <path d=\"M4 13h4\" />", "chevron": "<path d=\"m6 9 6 6 6-6\" />"};
 const POI_TYPES = [  // rodzaje miejsc z okolica.json (rozpoznaje je okolica.py)
   { key: "supermarket", label: "Supermarket", color: "#c2410c", icon: "cart" },
   { key: "shop", label: "Sklep spożywczy", color: "#9a3412", icon: "store" },
@@ -1199,10 +1216,10 @@ function syncControls(item, offer) {
   const isSelected = selected.has(offer.id), isActive = offer.id === activeId;
   item.classList.toggle("active", isActive);
   item.classList.toggle("selected", isSelected);
-  const rank = item.querySelector(".rank");
-  rank.setAttribute("aria-pressed", String(isSelected));
-  rank.setAttribute("aria-label", `${isSelected ? "Odznacz" : "Zaznacz"} ofertę ${offer.rank}`);
-  rank.title = isSelected ? "Odznacz ofertę" : "Zaznacz ofertę";
+  const pick = item.querySelector(".pick");
+  pick.setAttribute("aria-pressed", String(isSelected));
+  pick.setAttribute("aria-label", `${isSelected ? "Odznacz" : "Zaznacz"} ofertę ${offer.rank}`);
+  pick.title = isSelected ? "Odznacz ofertę" : "Zaznacz ofertę (gwiazdka)";
   const collapse = item.querySelector(".collapse");
   collapse.setAttribute("aria-expanded", String(isActive));
   collapse.setAttribute("aria-label", `${isActive ? "Zwiń" : "Rozwiń"} ofertę ${offer.rank}`);
@@ -1277,20 +1294,20 @@ function card(offer) {
   item.classList.toggle("selected", selected.has(offer.id));
   item.classList.toggle("active", offer.id === activeId);
 
-  const rank = el("button", "rank", String(offer.rank));
-  rank.type = "button";
-  rank.addEventListener("click", () => toggleSelected(offer.id, !selected.has(offer.id)));
+  const pick = el("button", "pick");
+  pick.type = "button";
+  pick.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS.star}</svg>`;
+  pick.addEventListener("click", () => toggleSelected(offer.id, !selected.has(offer.id)));
   const collapse = el("button", "collapse");
   collapse.type = "button";
   collapse.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS.chevron}</svg>`;
-  collapse.addEventListener("click", () => (offer.id === activeId ? deactivate() : activate(offer.id)));
 
   const show = el("button", "show");
   show.type = "button";
-  show.addEventListener("click", () => activate(offer.id));
-  const week = el("span", "week", duration(offer.week));
-  week.append(el("span", "per", "w drodze tygodniowo"));
+  const week = el("span", "week");
+  week.append(el("span", "num", String(offer.rank)), duration(offer.week), el("span", "per", "w drodze tygodniowo"));
   const facts = el("span", "facts");
   facts.append(el("span", "price", priceText(offer)));
   if (offer.pricePerM2) facts.append(el("span", null, `${numbers.format(offer.pricePerM2)} zł/m²`));
@@ -1312,7 +1329,12 @@ function card(offer) {
   const actions = el("div", "actions");
   actions.append(link("Otwórz ogłoszenie", offer.link),
                  link("Okolica w Google Maps", `https://www.google.com/maps/search/?api=1&query=${offer.lat},${offer.lng}`));
-  item.append(rank, show, collapse, actions);
+  item.append(show, pick, collapse, actions);
+  // cały nagłówek karty rozwija i zwija ofertę; numer, linki i sekcje mają własne działanie
+  item.addEventListener("click", event => {
+    if (event.target.closest("a, .pick, section")) return;
+    if (offer.id === activeId) deactivate(); else activate(offer.id);
+  });
   syncControls(item, offer);
   if (offer.id === activeId) item.append(detailsSection(offer), routesSection(offer), nearbySection(offer));
   items.set(offer.id, item);
