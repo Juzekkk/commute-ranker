@@ -1226,12 +1226,18 @@ function detailsSection(offer) {
     ["Własność", details.ownership],
     ["Kaucja", details.deposit],
     ["Dostępne od", details.freeFrom && formatDate(details.freeFrom)],
+    ["Portal", offer.portal],
     ["Ogłoszeniodawca", offer.advertiser],
     ["Dodane", offer.listed && `${formatDate(offer.listed)} (${daysAgo(offer.listed)})`],
     ["Wyposażenie", (details.equipment || []).join(", ")],
   ].filter(([, value]) => value);
   const list = el("dl", "facts-list");
   for (const [label, value] of rows) list.append(el("dt", null, label), el("dd", null, value));
+  if (offer.alsoOn?.length) {  // to samo mieszkanie na drugim portalu
+    const also = el("dd");
+    offer.alsoOn.forEach((other, i) => { if (i) also.append(", "); also.append(link(other.portal, other.link)); });
+    list.append(el("dt", null, "Także na"), also);
+  }
   body.append(list);
   const extras = (details.extras || []).filter(extra => !(extra === "winda" && details.lift != null));
   if (extras.length) {
@@ -1463,10 +1469,11 @@ function card(offer) {
   if (offer.year) facts.append(el("span", null, `rok ${offer.year}`));
   show.append(week, linesFor(offer), facts, el("span", "title", offer.title));
   const neighbours = (groupOf.get(offer.id)?.offers || []).filter(other => other.id !== offer.id);
-  if (offer.isNew || offer.approximate || neighbours.length) {
+  if (offer.isNew || offer.approximate || neighbours.length || offer.alsoOn?.length) {
     const badges = el("span", "badges");
     if (offer.isNew) badges.append(el("span", "badge new", "Nowa"));
     if (offer.approximate) badges.append(el("span", "badge", "Przybliżona lokalizacja"));
+    if (offer.alsoOn?.length) badges.append(el("span", "badge", `Także: ${offer.alsoOn.map(other => other.portal).join(", ")}`));
     if (neighbours.length) {
       badges.append(el("span", "badge", `W tym samym miejscu: ${neighbours.map(other => other.rank).join(", ")}`));
     }
