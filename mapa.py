@@ -103,6 +103,19 @@ TEMPLATE = r"""<!doctype html>
   .filters button[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--surface); }
   .filters .count { margin-left: 5px; opacity: .75; }
   .hint { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+  .sort { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .sort select {
+    min-width: 0;
+    flex: 1;
+    padding: 3px 7px;
+    font: inherit;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+  }
+  .sort select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
   details { margin-top: 8px; font-size: 13px; color: var(--muted); }
   summary { cursor: pointer; }
   details ul { margin: 6px 0 0; padding-left: 18px; }
@@ -222,6 +235,49 @@ TEMPLATE = r"""<!doctype html>
     background: #c8102e;
   }
   .marker.active { transform: scale(1.2); box-shadow: 0 0 0 3px #0067b1, 0 1px 4px rgb(0 0 0 / .35); }
+  /* kilka ofert w jednym miejscu: numery ułożone jak talia kart */
+  .stack {
+    display: flex;
+    align-items: center;
+    padding: 2px;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 1px 5px rgb(0 0 0 / .45);
+  }
+  .stack .marker { box-shadow: none; }
+  .stack .marker + .marker { margin-left: -8px; }
+  /* pierwszy numer na wierzchu, żeby kropka "nowa" w prawym górnym rogu nie chowała się pod kolejnym */
+  .stack .marker:nth-child(1) { z-index: 3; }
+  .stack .marker:nth-child(2) { z-index: 2; }
+  .stack .marker:nth-child(3) { z-index: 1; }
+  .stack .marker.active { transform: none; z-index: 4; box-shadow: 0 0 0 2px #0067b1; }
+  .stack.approximate { box-shadow: 0 0 0 5px rgb(27 36 48 / .22), 0 1px 5px rgb(0 0 0 / .45); }
+  .stack.active { box-shadow: 0 0 0 3px #0067b1, 0 1px 5px rgb(0 0 0 / .45); }
+  .marker.more { background: #dce1e6; color: #1b2430; }
+  .group-popup { display: grid; gap: 6px; }
+  .group-title { font-weight: 600; }
+  .group-note { font-size: 12.5px; color: #5d6876; }
+  .group-list { display: grid; gap: 2px; max-height: 280px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+  .group-item {
+    all: unset;
+    box-sizing: border-box;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr);
+    column-gap: 8px;
+    align-items: center;
+    padding: 4px 6px 4px 4px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .group-item:hover { background: #eaf2f9; }
+  .group-item:focus-visible { outline: 2px solid #0067b1; outline-offset: 1px; }
+  .group-item[aria-current="true"] { background: #eaf2f9; box-shadow: inset 3px 0 0 #0067b1; }
+  .group-item .marker { box-shadow: none; }
+  .group-item .marker.active { transform: none; }
+  .group-main { display: grid; min-width: 0; font-size: 13px; line-height: 1.35; }
+  .group-main strong { font-size: 14px; }
+  .group-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #5d6876; }
   .station {
     display: block;
     width: 18px;
@@ -413,7 +469,17 @@ TEMPLATE = r"""<!doctype html>
       <button type="button" data-filter="selected" aria-pressed="false">Zaznaczone<span class="count" id="count-selected"></span></button>
       <button type="button" data-filter="new" aria-pressed="false">Nowe<span class="count" id="count-new"></span></button>
     </div>
-    <p class="hint">Kliknij ofertę, żeby zobaczyć szczegóły, dojazdy i okolicę na mapie. Numer oferty ją zaznacza, strzałka po prawej zwija. Niebieski krąg ma promień 500 m, czyli ok. 6 minut pieszo.</p>
+    <div class="sort">
+      <label for="sort">Sortuj według</label>
+      <select id="sort">
+        <option value="week">czasu w drodze</option>
+        <option value="price">ceny, od najniższej</option>
+        <option value="total">ceny z czynszem, od najniższej</option>
+        <option value="m2">ceny za m², od najniższej</option>
+        <option value="listed">daty dodania, od najnowszych</option>
+      </select>
+    </div>
+    <p class="hint">Kliknij ofertę, żeby zobaczyć szczegóły, dojazdy i okolicę na mapie. Numer oferty ją zaznacza, strzałka po prawej zwija. Niebieski krąg ma promień 500 m, czyli ok. 6 minut pieszo. Kilka ofert w jednym miejscu ma wspólny znacznik z kilkoma numerami: kliknij go, żeby zobaczyć listę.</p>
     <details>
       <summary>Podsumowanie wyszukiwania</summary>
       <ul id="summary"></ul>
@@ -464,7 +530,7 @@ for (const park of nearbyData?.parks || []) {  // prostokąt otaczający: szybki
 
 data.places.forEach((place, i) => { place.color = LINE_COLORS[i % LINE_COLORS.length]; });
 const byId = new Map(data.offers.map(offer => [offer.id, offer]));
-const markers = new Map();
+const groupOf = new Map();  // id oferty -> grupa ofert w tym samym miejscu (z jej znacznikiem)
 const items = new Map();
 let selected = loadSelected();
 let filter = "all";
@@ -491,6 +557,13 @@ function roomsText(n) {
   const last = n % 10, lastTwo = n % 100;
   const word = n === 1 ? "pokój" : (last >= 2 && last <= 4 && !(lastTwo >= 12 && lastTwo <= 14)) ? "pokoje" : "pokoi";
   return `${n} ${word}`;
+}
+function plural(n, one, few, many) {
+  const last = n % 10, lastTwo = n % 100;
+  return n === 1 ? one : (last >= 2 && last <= 4 && !(lastTwo >= 12 && lastTwo <= 14)) ? few : many;
+}
+function offersText(n) {
+  return `${n} ${plural(n, "oferta", "oferty", "ofert")}`;
 }
 function priceText(offer) {
   const price = `${numbers.format(offer.price)} zł`;
@@ -540,14 +613,32 @@ for (const place of data.places) {
 
 const offerLayer = L.layerGroup().addTo(map);
 const poiLayer = L.layerGroup().addTo(map);
-function markerIcon(offer) {
+function chipHtml(offer, extra) {
   const classes = ["marker"];
   if (selected.has(offer.id)) classes.push("selected");
-  if (offer.approximate) classes.push("approximate");
+  if (extra) classes.push(extra);
   if (offer.isNew) classes.push("new");
   if (offer.id === activeId) classes.push("active");
-  return L.divIcon({ className: "", html: `<span class="${classes.join(" ")}">${Number(offer.rank)}</span>`,
+  return `<span class="${classes.join(" ")}">${Number(offer.rank)}</span>`;
+}
+function markerIcon(offer) {
+  return L.divIcon({ className: "", html: chipHtml(offer, offer.approximate ? "approximate" : ""),
                      iconSize: [26, 26], iconAnchor: [13, 13], popupAnchor: [0, -14] });
+}
+function groupIcon(group) {  // kilka ofert w jednym miejscu: do 3 numerów, przy większej liczbie 2 numery i "+N"
+  const offers = group.offers;
+  if (offers.length === 1) return markerIcon(offers[0]);
+  let shown = offers.length <= 3 ? offers : offers.slice(0, 2);
+  const active = offers.find(offer => offer.id === activeId);
+  if (active && !shown.includes(active)) shown = [...shown.slice(0, -1), active];  // wybrana zawsze widoczna
+  const more = offers.length - shown.length;
+  const chips = shown.map(offer => chipHtml(offer)).join("") + (more ? `<span class="marker more">+${more}</span>` : "");
+  const width = 4 + 26 + (shown.length + (more ? 1 : 0) - 1) * 18;
+  const classes = ["stack"];
+  if (offers.some(offer => offer.approximate)) classes.push("approximate");
+  if (active) classes.push("active");
+  return L.divIcon({ className: "", html: `<span class="${classes.join(" ")}">${chips}</span>`,
+                     iconSize: [width, 30], iconAnchor: [width / 2, 15], popupAnchor: [0, -16] });
 }
 function popupFor(offer) {
   const title = link(offer.title, offer.link);
@@ -557,11 +648,67 @@ function popupFor(offer) {
              linesFor(offer), el("span", null, priceText(offer)));
   return box;
 }
-for (const offer of data.offers) {
-  const marker = L.marker([offer.lat, offer.lng], { icon: markerIcon(offer), title: `${offer.rank}. ${offer.title}`, riseOnHover: true });
-  marker.bindPopup(() => popupFor(offer), { maxWidth: 280, autoPanPadding: [30, 30] });
-  marker.on("click", () => activate(offer.id, { fromMap: true }));
-  markers.set(offer.id, marker);
+function groupPopup(group) {  // lista ofert z jednego miejsca; kliknięcie rozwija ofertę na liście
+  const box = el("div", "group-popup");
+  box.append(el("span", "group-title", `${offersText(group.offers.length)} w tym miejscu`));
+  if (group.offers.some(offer => offer.approximate)) {
+    box.append(el("span", "group-note", "Przynajmniej część ma przybliżoną lokalizację: ogłoszeniodawca ukrył dokładny adres."));
+  }
+  const list = el("ul", "group-list");
+  for (const offer of group.offers) {
+    const button = el("button", "group-item");
+    button.type = "button";
+    if (offer.id === activeId) button.setAttribute("aria-current", "true");
+    button.innerHTML = chipHtml(offer);
+    const main = el("span", "group-main");
+    const facts = [priceText(offer), offer.area && `${offer.area} m²`, offer.rooms && roomsText(offer.rooms)];
+    main.append(el("strong", null, `${duration(offer.week)} tygodniowo`),
+                el("span", null, facts.filter(Boolean).join(" · ")), el("span", "group-sub", offer.title));
+    button.append(main);
+    button.addEventListener("click", () => activate(offer.id, { fromMap: true }));
+    const item = el("li");
+    item.append(button);
+    list.append(item);
+  }
+  box.append(list);
+  return box;
+}
+
+const GROUP_RADIUS = 25;  // [m] oferty bliżej siebie dzielą znacznik, np. lokale w jednym budynku
+function groupByLocation(offers) {
+  const groups = [];
+  for (const offer of offers) {  // w kolejności listy: pierwszy numer na znaczniku to najwyżej na liście
+    const kx = 111320 * Math.cos(offer.lat * Math.PI / 180);
+    const group = groups.find(g => Math.hypot((g.lat - offer.lat) * 110540, (g.lng - offer.lng) * kx) <= GROUP_RADIUS);
+    if (group) group.offers.push(offer); else groups.push({ lat: offer.lat, lng: offer.lng, offers: [offer] });
+  }
+  return groups;
+}
+function groupMarker(group) {
+  const [first] = group.offers;
+  const single = group.offers.length === 1;
+  const marker = L.marker([group.lat, group.lng], {
+    icon: groupIcon(group), riseOnHover: true,
+    title: single ? `${first.rank}. ${first.title}`
+      : `${offersText(group.offers.length)} w tym miejscu: ${group.offers.map(offer => offer.rank).join(", ")}`,
+  });
+  if (single) {
+    marker.bindPopup(() => popupFor(first), { maxWidth: 280, autoPanPadding: [30, 30] });
+    marker.on("click", () => activate(first.id, { fromMap: true }));
+  } else {
+    marker.bindPopup(() => groupPopup(group), { minWidth: 260, maxWidth: 320, autoPanPadding: [30, 30] });
+  }
+  return marker;
+}
+function placeMarkers(offers) {  // znaczniki tylko dla widocznych ofert, pogrupowane według miejsca
+  offerLayer.clearLayers();
+  groupOf.clear();
+  for (const group of groupByLocation(offers)) {
+    group.marker = groupMarker(group);
+    group.marker.setZIndexOffset(group.offers.some(offer => offer.id === activeId) ? 900 : 0);
+    for (const offer of group.offers) groupOf.set(offer.id, group);
+    offerLayer.addLayer(group.marker);
+  }
 }
 
 const nearbyCache = new Map();  // id oferty -> najbliższe miejsca według rodzaju
@@ -1045,7 +1192,11 @@ function syncControls(item, offer) {
 
 function refresh(id) {
   const offer = byId.get(id);
-  markers.get(id).setIcon(markerIcon(offer)).setZIndexOffset(id === activeId ? 900 : 0);
+  const group = groupOf.get(id);
+  if (group) {
+    group.marker.setIcon(groupIcon(group)).setZIndexOffset(group.offers.some(o => o.id === activeId) ? 900 : 0);
+    if (group.offers.length > 1 && group.marker.isPopupOpen()) group.marker.setPopupContent(groupPopup(group));
+  }
   const item = items.get(id);
   if (item) syncControls(item, offer);
 }
@@ -1073,7 +1224,6 @@ function activate(id, { fromMap = false } = {}) {
   }
   refresh(id);
   const offer = byId.get(id);
-  const marker = markers.get(id);
   if (previous !== id) {
     pinned = null;
     previewing = null;
@@ -1084,7 +1234,7 @@ function activate(id, { fromMap = false } = {}) {
   if (item && !item.querySelector(".details")) item.append(detailsSection(offer), routesSection(offer));
   showNearby(offer);
   walkCircle.setLatLng([offer.lat, offer.lng]).addTo(map);
-  if (!fromMap && offerLayer.hasLayer(marker)) {
+  if (!fromMap && groupOf.has(id)) {
     // bez dymka: dane oferty są na karcie, a dymek zasłaniałby okolicę
     map.closePopup();
     const zoom = Math.max(map.getZoom(), 15);  // przy 15 mieści się cały promień okolicy (1 km)
@@ -1129,10 +1279,14 @@ function card(offer) {
   if (offer.rooms) facts.append(el("span", null, roomsText(offer.rooms)));
   if (offer.year) facts.append(el("span", null, `rok ${offer.year}`));
   show.append(week, linesFor(offer), facts, el("span", "title", offer.title));
-  if (offer.isNew || offer.approximate) {
+  const neighbours = (groupOf.get(offer.id)?.offers || []).filter(other => other.id !== offer.id);
+  if (offer.isNew || offer.approximate || neighbours.length) {
     const badges = el("span", "badges");
     if (offer.isNew) badges.append(el("span", "badge new", "Nowa"));
     if (offer.approximate) badges.append(el("span", "badge", "Przybliżona lokalizacja"));
+    if (neighbours.length) {
+      badges.append(el("span", "badge", `W tym samym miejscu: ${neighbours.map(other => other.rank).join(", ")}`));
+    }
     show.append(badges);
   }
 
@@ -1146,10 +1300,39 @@ function card(offer) {
   return item;
 }
 
+// Kolejność listy; numery ofert zostają z rankingu dojazdów, więc na mapie znaczą to samo
+const SORT_KEY = "mieszkania-wedlug-dojazdu:sortowanie";
+const SORTS = {  // wartość do porównania; brak danych ląduje na końcu listy
+  week: offer => offer.week,
+  price: offer => offer.price,
+  total: offer => offer.price + (offer.rent || 0),
+  m2: offer => offer.pricePerM2 || (offer.area ? offer.price / offer.area : null),
+  listed: offer => offer.listed ? -Date.parse(offer.listed) : null,
+};
+const sortSelect = document.getElementById("sort");
+let sortBy = "week";
+try { sortBy = SORTS[localStorage.getItem(SORT_KEY)] ? localStorage.getItem(SORT_KEY) : "week"; } catch { /* odczyt niedostępny */ }
+sortSelect.value = sortBy;
+sortSelect.addEventListener("change", () => {
+  sortBy = sortSelect.value;
+  try { localStorage.setItem(SORT_KEY, sortBy); } catch { /* zapis niedostępny */ }
+  render();
+  document.getElementById("list").scrollTop = 0;
+});
+function sorted(offers) {
+  const key = SORTS[sortBy];
+  return [...offers].sort((a, b) => {
+    const x = key(a), y = key(b);
+    if (x == null || y == null) return x == null && y == null ? a.rank - b.rank : x == null ? 1 : -1;
+    return x - y || a.rank - b.rank;  // remis: lepszy dojazd wyżej
+  });
+}
+
 function visibleOffers() {
-  if (filter === "selected") return data.offers.filter(offer => selected.has(offer.id));
-  if (filter === "new") return data.offers.filter(offer => offer.isNew);
-  return data.offers;
+  let offers = data.offers;
+  if (filter === "selected") offers = offers.filter(offer => selected.has(offer.id));
+  if (filter === "new") offers = offers.filter(offer => offer.isNew);
+  return sorted(offers);
 }
 
 function updateCounts() {
@@ -1168,10 +1351,9 @@ function fitTo(offers) {
 function render({ fit = false } = {}) {
   const offers = visibleOffers();
   if (activeId && !offers.some(offer => offer.id === activeId)) deactivate();
+  placeMarkers(offers);  // przed kartami: karta pokazuje sąsiadów z tego samego miejsca
   items.clear();
   document.getElementById("list").replaceChildren(...offers.map(card));
-  offerLayer.clearLayers();
-  for (const offer of offers) offerLayer.addLayer(markers.get(offer.id));
   const empty = document.getElementById("empty");
   empty.hidden = offers.length > 0;
   empty.textContent = EMPTY[filter];

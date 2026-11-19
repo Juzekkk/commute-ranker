@@ -42,6 +42,12 @@ OFFERS = [
     ("Mieszkanie z ogródkiem, Wilanów", 52.1633, 21.0832, 4600, 850, 57, 3, 2016, "parter", False, False),
     ("3 pokoje na Bielanach, metro Słodowiec", 52.2765, 20.9629, 4100, 720, 58, 3, 1981, "3", False, True),
     ("Kawalerka w apartamentowcu, Praga Północ", 52.2533, 21.0353, 3400, 600, 30, 1, 2018, "9", False, False),
+    # kilka lokali w jednym budynku: na mapie wspólny znacznik
+    ("2 pokoje w tej samej inwestycji, Wola", 52.2297, 20.9792, 5200, 950, 51, 2, 2019, "6", False, True),
+    ("Kawalerka w inwestycji przy Rondzie Daszyńskiego", 52.2297, 20.9792, 3900, 800, 32, 1, 2019, "3", False, False),
+    ("3 pokoje z tarasem, Wola", 52.2297, 20.9792, 6100, 1100, 66, 3, 2019, "12", False, False),
+    ("Mieszkanie na wysokim piętrze, Wola", 52.2298, 20.9793, 4600, 880, 43, 2, 2019, "10", False, False),
+    ("2 pokoje w kamienicy obok, Powiśle", 52.2365, 21.0272, 4400, 580, 47, 2, 1912, "2", True, False),
 ]
 
 ADVERTISERS = ["osoba prywatna", "Biuro Nieruchomości Przykładowe", "Agencja Mieszkań Testowych",

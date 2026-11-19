@@ -158,8 +158,10 @@ Po kliknięciu oferty mapa przybliża się do niej i rysuje okrąg o promieniu 5
 Pozostałe funkcje:
 
 - Kliknięcie numeru oferty ją zaznacza. Filtry u góry pokazują wszystkie oferty, zaznaczone albo nowe.
+- Listę można posortować według czasu w drodze (domyślnie), ceny, ceny z czynszem, ceny za m² albo daty dodania. Numery ofert zostają z rankingu dojazdów, więc na liście i mapie znaczą to samo przy każdym sortowaniu. Oferty bez danego parametru trafiają na koniec.
+- Oferty oddalone od siebie o najwyżej 25 m, np. kilka lokali w jednym budynku, mają na mapie wspólny znacznik z numerami ułożonymi jak talia kart: do trzech numerów, a przy większej liczbie dwa i „+N”. Kliknięcie znacznika otwiera listę tych ofert, a wybór pozycji rozwija ofertę na liście. Karta oferty ma oznaczenie „W tym samym miejscu” z numerami pozostałych.
 - Szerokość listy zmienisz, przeciągając jej krawędź (albo strzałkami na klawiaturze). Podwójne kliknięcie przywraca domyślną.
-- Zaznaczenia i szerokość listy zapamiętuje przeglądarka (`localStorage`), więc zostają po ponownym wygenerowaniu strony.
+- Zaznaczenia, sortowanie i szerokość listy zapamiętuje przeglądarka (`localStorage`), więc zostają po ponownym wygenerowaniu strony.
 - Przełącznik warstw w prawym górnym rogu mapy zmienia podkład na zdjęcia satelitarne.
 - Strona ma tryb ciemny zgodny z ustawieniem systemu, a na wąskim ekranie mapa przechodzi nad listę.
 
