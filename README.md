@@ -1,6 +1,6 @@
 # otodom-commute-ranker
 
-Ranking ofert mieszkań z Otodom według łącznego czasu, który co tydzień spędzisz w komunikacji miejskiej, jeżdżąc do swoich miejsc: pracy, uczelni, rodziców, na siłownię. Cena i metraż mówią, ile płacisz za mieszkanie. Ten ranking pokazuje, ile czasu będzie Cię kosztowało mieszkanie w tym miejscu.
+Ranking ofert mieszkań i domów z Otodom, Nieruchomości Online i OLX według łącznego czasu, który co tydzień spędzisz w komunikacji miejskiej, jeżdżąc do swoich miejsc: pracy, uczelni, rodziców, na siłownię. Cena i metraż mówią, ile płacisz za mieszkanie. Ten ranking pokazuje, ile czasu będzie Cię kosztowało mieszkanie w tym miejscu.
 
 Wynik to tabela (Markdown i CSV) oraz strona `mapa.html` z listą ofert obok mapy. Przy każdej ofercie są zdjęcia, rzut, warianty przejazdu z przesiadkami i najbliższe sklepy, przystanki i parki.
 
@@ -38,10 +38,10 @@ uv pip install -r requirements.txt
 
 # ustawienia
 cp config.example.toml config.toml # Windows: copy config.example.toml config.toml
-# w config.toml wpisz: adres wyszukiwania Otodom, klucz Google, swoje miejsca
+# w config.toml wpisz: adresy wyszukiwań (Otodom, Nieruchomości Online, OLX), klucz Google, swoje miejsca
 
 # uruchomienie
-python dojazdy.py   # oferty, czasy dojazdu, ranking, warianty tras
+python dojazdy.py   # oferty, czasy dojazdu, ranking, warianty tras (python dojazdy.py olx-m: tylko jedno wyszukiwanie)
 python okolica.py   # sklepy, przystanki, parki (raz w miesiącu)
 python mapa.py      # składa mapa.html i otwiera ją w przeglądarce
 ```
@@ -50,13 +50,15 @@ Pierwsze uruchomienie `dojazdy.py` trwa najdłużej: skrypt otwiera kartę każd
 
 ## Jak to działa
 
-Dane zbierają dwa niezależne skrypty, a trzeci składa z nich stronę. Gotowa strona pobiera z sieci tylko podkład mapy, bibliotekę Leaflet, czcionkę i zdjęcia ofert.
+Dane zbierają dwa niezależne skrypty (`dojazdy.py` z kilku portali i `okolica.py` z OpenStreetMap), a `mapa.py` składa z nich stronę. Gotowa strona pobiera z sieci tylko podkład mapy, bibliotekę Leaflet, czcionkę i zdjęcia ofert.
 
 ```mermaid
 flowchart LR
     accTitle: Przepływ danych w projekcie
-    accDescr: dojazdy.py łączy oferty z Otodom z czasami i trasami z Google, okolica.py zamienia wycinek OpenStreetMap w okolica.json, a mapa.py składa oba wyniki w stronę mapa.html.
+    accDescr: otodom.py, nieruchomosci_online.py i olx.py pobierają oferty z portali, oferty.py składa je w jedną listę, dojazdy.py łączy ją z czasami i trasami z Google, okolica.py zamienia wycinek OpenStreetMap w okolica.json, a mapa.py składa oba wyniki w stronę mapa.html.
     otodom["Otodom<br/>wyniki i karty ofert"]
+    nol["Nieruchomości Online<br/>wyniki i karty ofert"]
+    portale["otodom.py<br/>nieruchomosci_online.py<br/>olx.py<br/>oferty.py"]
     google["Google Routes API<br/>czasy i trasy"]
     osm["Geofabrik<br/>wycinek OpenStreetMap"]
     dojazdy["dojazdy.py"]
@@ -65,7 +67,9 @@ flowchart LR
     wyniki["wyniki.json<br/>wyniki.csv, wyniki.md"]
     okolica_json["okolica.json"]
     html["mapa.html"]
-    otodom --> dojazdy
+    otodom --> portale
+    nol --> portale
+    portale --> dojazdy
     google --> dojazdy
     dojazdy --> wyniki
     osm --> okolica
@@ -76,22 +80,34 @@ flowchart LR
     classDef source fill:#f3f4f6,stroke:#6b7280,stroke-width:2px,color:#1f2937
     classDef script fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#1e3a5f
     classDef output fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d
-    class otodom,google,osm source
-    class dojazdy,okolica,mapa script
+    class otodom,nol,google,osm source
+    class portale,dojazdy,okolica,mapa script
     class wyniki,okolica_json,html output
 ```
 
 | Skrypt | Co robi | Kiedy uruchamiać |
 | --- | --- | --- |
-| `dojazdy.py` | Oferty z Otodom, filtry, czasy dojazdu, ranking, warianty tras | Codziennie albo kiedy chcesz |
+| `dojazdy.py` | Czasy dojazdu z Google, filtry, ranking, warianty tras, pliki wynikowe. Oferty bierze z modułów poniżej | Codziennie albo kiedy chcesz |
 | `okolica.py` | Sklepy, stacje, przystanki, siłownie, apteki, paczkomaty i parki z OpenStreetMap | Raz w miesiącu |
 | `mapa.py` | Strona `mapa.html` z wyników i danych okolicy, bez zapytań do sieci | Po każdym z powyższych |
 
+Zbieranie ofert jest podzielone na moduły, których nie uruchamiasz osobno:
+
+| Moduł | Co robi |
+| --- | --- |
+| `oferty.py` | Łączy oferty z wielu portali w jedną listę, pobiera karty ofert, pilnuje obszarów wykluczonych (`wykluczenia.json`) i pamięci kart (`stan.json`). Nie zna szczegółów żadnego portalu |
+| `otodom.py` | Wszystko o Otodom: adresy stron wyników, czytanie danych strony, karta oferty |
+| `nieruchomosci_online.py` | Wszystko o Nieruchomościach Online: strona wyników, karta oferty |
+| `olx.py` | Wszystko o OLX: strona wyników z gotowymi danymi ofert (bez kart) |
+| `siec.py` | Wspólne pobieranie stron: ponowienia, obsługa 429, rezygnacja z portalu, który nie odpowiada ([niżej](#błędy-portali-429-i-limit-czasu)) |
+
+Każdy portal ma ten sam zestaw funkcji (`matches`, `search`, `card`), więc dodanie kolejnego portalu to jeden nowy plik i wpis w liście `SOURCES` w `oferty.py`. Wspólny format oferty opisuje nagłówek `oferty.py`.
+
 ### dojazdy.py krok po kroku
 
-1. **Wyszukiwanie.** Skrypt otwiera adres `otodom_url` z `config.toml` i przechodzi wszystkie strony wyników po 72 oferty. Otodom osadza dane w każdej stronie jako JSON (`__NEXT_DATA__`) i skrypt czyta właśnie je, a nie HTML. Inwestycja deweloperska rozwija się w swoje lokale, a duplikaty odpadają.
+1. **Wyszukiwanie.** Skrypt otwiera adresy z sekcji `[wyszukiwania]` w `config.toml` (po kolei, każdy może być osobnym wyszukiwaniem, np. mieszkań i domów) i przechodzi wszystkie strony wyników (Otodom: po 72 oferty, pozostałe portale po ok. 40). Portal skrypt rozpoznaje po nazwie domeny w adresie i czyta go własnym modułem (`otodom.py`, `nieruchomosci_online.py`, `olx.py`), więc portale można mieszać na jednej liście. Otodom osadza dane w każdej stronie jako JSON (`__NEXT_DATA__`) i skrypt czyta właśnie je, a nie HTML. Inwestycja deweloperska rozwija się w swoje lokale, a duplikaty odpadają.
 2. **Pierwszy odsiew, bez dodatkowych zapytań.** Odpadają oferty bez ceny i inwestycje z terminem oddania po `max_rok_budowy`.
-3. **Karty ofert.** Dla ofert, których skrypt jeszcze nie zna, otwiera ich karty i zapisuje w `stan.json`: współrzędne, rok budowy, parametry (piętro, winda, ogrzewanie, kaucja, wyposażenie), wszystkie zdjęcia i rzut. Jeśli ogłoszeniodawca ukrył dokładny adres, punkt jest środkiem okręgu, a oferta dostaje oznaczenie „przybliżona”. Po 10 pustych kartach z rzędu skrypt uznaje, że Otodom blokuje zapytania, i przerywa, zapisując postęp.
+3. **Karty ofert.** Dla ofert, których skrypt jeszcze nie zna, otwiera ich karty i zapisuje w `stan.json`: współrzędne, rok budowy, parametry (piętro, winda, ogrzewanie, kaucja, wyposażenie), wszystkie zdjęcia (rzuty też, bo Otodom trzyma je razem ze zdjęciami). Oferty z obszarów wykluczonych na mapie ([zobacz niżej](#wykluczanie-obszarów)) zapisuje tylko z lokalizacją, a dalej pomija: bez czasów, tras i zdjęć. Jeśli ogłoszeniodawca ukrył dokładny adres, punkt jest środkiem okręgu, a oferta dostaje oznaczenie „przybliżona”. Po 10 pustych kartach z rzędu skrypt uznaje, że Otodom blokuje zapytania, i przerywa, zapisując postęp.
 4. **Drugi odsiew.** Oferty z rokiem budowy po `max_rok_budowy` odpadają.
 5. **Czasy dojazdu.** Dla każdej pary (punkt oferty, Twoje miejsce) skrypt pyta Google Compute Route Matrix o czas przejazdu komunikacją z przyjazdem **w najbliższy wtorek o 9:00** według rzeczywistych rozkładów. Pyta po 100 punktów naraz i zapisuje wynik w `czasy.json` na 30 dni. Kluczem są współrzędne, nie numer oferty, więc kilka ofert w jednym budynku kosztuje jedno zapytanie, a oferta wystawiona ponownie nie kosztuje nic. Miejsca z `max_minut` idą pierwsze: punkt, który przekracza limit, nie zużywa zapytań na pozostałe miejsca.
 6. **Ranking.** Odpadają oferty bez połączenia i przekraczające `max_minut`. Pozostałe są sortowane rosnąco po tygodniowym czasie w drodze (wzór niżej).
@@ -155,6 +171,36 @@ Po kliknięciu oferty mapa przybliża się do niej i rysuje okrąg o promieniu 5
 
 ![Sekcja Okolica: najbliższy supermarket, sklep, metro, kolej, tramwaj, park, siłownia, apteka i paczkomat z odległościami](docs/img/okolica.jpg)
 
+### Nieruchomości Online
+
+Adresy z `nieruchomosci-online.pl` działają tak samo jak z Otodom: filtry ustawiasz na stronie portalu i kopiujesz adres wyników (np. `https://warszawa.nieruchomosci-online.pl/mieszkania,wynajem/` albo adres z `szukaj.html?...`). Różnice:
+
+- ze strony wyników skrypt bierze tytuł, cenę, metraż, pokoje i piętro, a z karty oferty współrzędne (razem z informacją, czy lokalizacja jest przybliżona), rok budowy, piętro budynku, windę i dodatki;
+- zdjęcia: wszystkie, z danych osadzonych w stronie oferty (duży rozmiar);
+- brakuje ogrzewania, kaucji w części ofert, ogłoszeniodawcy i daty dodania, więc te pola są puste;
+- inwestycje deweloperskie bez współrzędnych na karcie są pomijane („nie udało się pobrać karty”).
+
+To samo mieszkanie bywa na obu portalach. Jeśli oferty z różnych portali mają tę samą cenę, metraż różniący się najwyżej o 1 m² i leżą nie dalej niż 60 m od siebie, skrypt zostawia tę z Otodom, a przy niej w sekcji Szczegóły pojawia się „Także na” z odnośnikiem do drugiego portalu. W podsumowaniu jest liczba scalonych ofert.
+
+### OLX
+
+Adres z działu Nieruchomości na `olx.pl` wklejasz jak każdy inny, np.:
+
+```toml
+"https://www.olx.pl/nieruchomosci/mieszkania/sprzedaz/warszawa/?search%5Bdist%5D=5&search%5Bfilter_float_price:to%5D=1200000&search%5Bfilter_float_m:from%5D=70&search%5Bfilter_enum_rooms%5D%5B0%5D=four"
+```
+
+Wszystkie filtry (cena, metraż, pokoje, odległość od miasta) ustawiasz na OLX i kopiujesz adres. Odmienności:
+
+- strona wyników OLX zawiera komplet danych (cena, metraż, pokoje, piętro, rynek, wszystkie zdjęcia, współrzędne), więc skrypt **nie otwiera kart ofert** i pobieranie jest szybkie: ok. 40 ofert na zapytanie, bez przerw między ofertami;
+- korzystamy tylko ze stron wyników, nie z API OLX;
+- OLX często ukrywa dokładny adres: takie oferty mają oznaczenie „przybliżona” (punkt jest wtedy orientacyjny, a ranking z niego liczy czas dojazdu);
+- rok budowy, ogrzewania, winda, kaucja i piętro budynku nie są podawane, więc filtr `max_rok_budowy` ich nie dotyczy, a te pola są puste;
+- rodzaj (mieszkanie albo dom) skrypt rozpoznaje po adresie: `/domy/` w ścieżce to domy;
+- na OLX „4 i więcej pokoi” jest jedną opcją, więc oferty pokazują `4+`; nazw sprzedających nie zapisujemy, tylko czy to osoba prywatna, czy firma.
+
+Wyszukiwania bez ostrych filtrów dają tysiące ofert, a każda unikalna lokalizacja zużywa parę z darmowego limitu Google ([zobacz niżej](#koszty-i-limity-google)), więc filtry na OLX warto ustawić ciasno.
+
 ### Sortowanie i kilka ofert w jednym miejscu
 
 **Sortowanie.** Lista „Sortuj według” nad ofertami układa je według czasu w drodze (domyślnie), ceny, ceny z czynszem, ceny za m² albo daty dodania, od najnowszych. Numery ofert zostają z rankingu dojazdów, więc przy każdym sortowaniu znaczą to samo na liście i na mapie. Oferty bez danego parametru trafiają na koniec, a przy równych wartościach wyżej jest oferta z krótszym dojazdem. Cenę i inne kryteria wyszukiwania zawężasz w `otodom_url`, a strona tylko zmienia kolejność.
@@ -176,7 +222,13 @@ Po kliknięciu oferty mapa przybliża się do niej i rysuje okrąg o promieniu 5
 Ustawienia są w `config.toml`, który tworzysz z szablonu `config.example.toml`. Szablon ma przykładowe wartości i komentarze. Plik jest w `.gitignore`, bo zawiera klucz Google.
 
 ```toml
-otodom_url = "https://www.otodom.pl/pl/wyniki/wynajem/mieszkanie/mazowieckie/warszawa/warszawa/warszawa?priceMax=5000&roomsNumber=%5BTWO%2CTHREE%5D"
+[wyszukiwania]
+otodom-m = "https://www.otodom.pl/pl/wyniki/wynajem/mieszkanie/mazowieckie/warszawa/warszawa/warszawa?priceMax=5000&roomsNumber=%5BTWO%2CTHREE%5D"
+otodom-d = "https://www.otodom.pl/pl/wyniki/wynajem/dom/mazowieckie/warszawa/warszawa/warszawa?priceMax=7000"
+nieruchomosci-m = "https://warszawa.nieruchomosci-online.pl/mieszkania,wynajem/"
+
+[pobieranie]
+limit_minut_na_portal = 20
 
 [filtry]
 max_rok_budowy = 2027
@@ -198,7 +250,8 @@ razy_w_tygodniu = 1
 
 | Klucz | Znaczenie |
 | --- | --- |
-| `otodom_url` | Adres strony z wynikami wyszukiwania na otodom.pl. Filtry (wynajem lub sprzedaż, cena, metraż, pokoje, dzielnice, rynek) ustawiasz w przeglądarce i kopiujesz adres. Im węższe wyszukiwanie, tym szybsze pierwsze uruchomienie |
+| `[wyszukiwania]` | Pary `nazwa = "adres"`: adresy stron z wynikami wyszukiwania na otodom.pl, nieruchomosci-online.pl i olx.pl (można mieszać). Nazwa jest dowolna (np. `otodom-m`) i służy do pobrania tylko tego wyszukiwania ([zobacz niżej](#pojedyncze-wyszukiwania)). Portale wyszukują naraz tylko mieszkania albo tylko domy, więc podajesz osobny adres dla każdego rodzaju; oferty ze wszystkich adresów trafiają do jednego rankingu. Filtry (wynajem lub sprzedaż, cena, metraż, pokoje, dzielnice, rynek) ustawiasz w przeglądarce i kopiujesz adres. Im węższe wyszukiwania, tym szybsze pierwsze uruchomienie. Starsze zapisy (lista adresów `wyszukiwania = [...]`, `otodom_urls`, `otodom_url`) nadal działają, a nazwami są wtedy numery 1, 2, ... |
+| `[pobieranie] limit_minut_na_portal` | Najdłuższy czas na jeden portal w jednym uruchomieniu (domyślnie 20 min). Po jego przekroczeniu skrypt przestaje pytać ten portal i idzie dalej ([zobacz niżej](#błędy-portali-429-i-limit-czasu)) |
 | `[filtry] max_rok_budowy` | Pomija oferty z późniejszym rokiem budowy i inwestycje z późniejszym terminem oddania. Usuń linię, jeśli nie chcesz tego filtra. Oferty bez ceny są pomijane zawsze |
 | `[google] api_key` | Klucz Google Maps Platform z włączonym Routes API |
 | `[[miejsca]] nazwa` | Nazwa miejsca na liście i mapie |
@@ -220,7 +273,7 @@ Warto ustawić w konsoli alert budżetowy, np. na 1 zł. Nie blokuje on zapytań
 
 ### Inny region
 
-Oferty bierzesz z dowolnego wyszukiwania Otodom, więc dla innego miasta wystarczy inny `otodom_url` i inne `[[miejsca]]`. Dane okolicy `okolica.py` pobiera z wycinka dla województwa mazowieckiego. Dla innego regionu zmień stałą `EXTRACT_URL` w `okolica.py` na odpowiedni plik z [download.geofabrik.de](https://download.geofabrik.de/) i usuń stary plik `.osm.pbf`.
+Oferty bierzesz z dowolnych wyszukiwań na obsługiwanych portalach, więc dla innego miasta wystarczą inne `wyszukiwania` i inne `[[miejsca]]`. Dane okolicy `okolica.py` pobiera z wycinka dla województwa mazowieckiego. Dla innego regionu zmień stałą `EXTRACT_URL` w `okolica.py` na odpowiedni plik z [download.geofabrik.de](https://download.geofabrik.de/) i usuń stary plik `.osm.pbf`.
 
 ## Codzienne użycie
 
@@ -270,7 +323,8 @@ Wszystkie są w `.gitignore`, bo zawierają dane pobrane z sieci albo Twoje wyni
 
 | Plik | Zawartość | Tworzy |
 | --- | --- | --- |
-| `stan.json` | Współrzędne, rok budowy, parametry, zdjęcia i rzut ofert, żeby nie otwierać ich kart ponownie | `dojazdy.py` |
+| `stan.json` | Współrzędne, rok budowy, parametry i zdjęcia ofert, żeby nie otwierać ich kart ponownie | `dojazdy.py` (przez `oferty.py`) |
+| `ogloszenia.json` | Oferty z ostatniego pobrania każdego wyszukiwania, żeby dało się odświeżyć tylko wybrane | `dojazdy.py` (przez `oferty.py`) |
 | `czasy.json` | Czasy dojazdu (ważne 30 dni) i licznik zapytań o czasy | `dojazdy.py` |
 | `trasy.json` | Warianty tras (ważne 30 dni) i licznik zapytań o trasy | `dojazdy.py` |
 | `wyniki.md`, `wyniki.csv`, `wyniki.json` | Ranking: do czytania, do Excela, dla strony | `dojazdy.py` |
@@ -296,8 +350,33 @@ Przykład: wyszukiwanie z 200 ofertami i 3 miejscami to przy pierwszym uruchomie
 - **Miesiąc liczony jak u Google.** Darmowy limit odnawia się o północy czasu pacyficznego[^3], czyli w Polsce ok. 9:00 pierwszego dnia miesiąca. Liczniki skryptu liczą miesiąc tak samo.
 - **Po wyczerpaniu limitu** skrypt nie pyta dalej. Oferty bez policzonego czasu pomija i policzy je w kolejnym miesiącu.
 - **Limit jest wspólny dla konta.** Licznik skryptu nie widzi innego użycia tego samego konta rozliczeniowego, a Google sumuje darmową pulę dla wszystkich projektów na koncie[^3].
-- **Otodom nie ma publicznego API.** Skrypt czyta strony tak jak przeglądarka, z przerwami 1–2 s między zapytaniami. Regulamin portalu nie przewiduje automatycznego pobierania ofert, więc to narzędzie wyłącznie do prywatnego użytku.
+- **Portale nie mają publicznego API.** Skrypt czyta strony tak jak przeglądarka, z przerwami 1–2 s między zapytaniami. Regulamin portalu nie przewiduje automatycznego pobierania ofert, więc to narzędzie wyłącznie do prywatnego użytku.
 - **Okolica nie wysyła zapytań.** Dane pochodzą z wycinka pobieranego raz w miesiącu, a strona liczy odległości lokalnie.
+
+### Pojedyncze wyszukiwania
+
+Każde wyszukiwanie w `[wyszukiwania]` ma nazwę. Bez argumentów `python dojazdy.py` pobiera wszystkie. Z nazwami pobiera tylko wskazane:
+
+```bash
+python dojazdy.py olx-m               # tylko OLX, mieszkania
+python dojazdy.py otodom-m otodom-d   # kilka naraz
+```
+
+Pozostałe wyszukiwania nie są pytane o nic: ranking, mapa i `wyniki.*` zawierają je dalej, z ofertami zapisanymi przy ich ostatnim pobraniu (`ogloszenia.json`). Cała reszta potoku działa jak zwykle (zapamiętane karty, czasy i trasy). W podsumowaniu jest wtedy informacja, z kiedy pochodzą oferty z nieodświeżanych wyszukiwań. Dzięki temu można np. odświeżać OLX codziennie, a Otodom raz w tygodniu.
+
+- **Pierwsze uruchomienie musi być pełne**, bez argumentów: dopiero ono zapisuje oferty wszystkich wyszukiwań. Częściowe uruchomienie wyszukiwania, którego jeszcze nie pobrano, pomija je w rankingu i mówi o tym w podsumowaniu.
+- Zmiana adresu przy nazwie unieważnia zapisane oferty tego wyszukiwania. Błędna nazwa kończy się listą nazw z `config.toml`.
+- Gdy pobieranie wyszukiwania się nie powiedzie (np. błąd 429), poprzednio zapisane oferty tego wyszukiwania zostają, a nowe je uzupełniają.
+
+### Błędy portali (429 i limit czasu)
+
+Portal, który uzna, że pytamy za często, odpowiada „too many requests” (HTTP 429) albo błędem serwera. Skrypt nie czeka wtedy w nieskończoność na komplet ofert (`siec.py`):
+
+1. **Ponowienia.** Zapytanie jest ponawiane do 4 razy z rosnącą przerwą (5, 10 i 20 s). Jeśli portal poda w nagłówku `Retry-After`, skrypt czeka tyle, ile on prosi, ale nie dłużej niż minutę. Po błędzie 429 skrypt zwalnia też tempo kolejnych zapytań.
+2. **Rezygnacja z portalu.** Po 3 nieudanych zapytaniach z rzędu (każde po wszystkich ponowieniach) albo po przekroczeniu limitu czasu portal jest uznany za zablokowany do końca uruchomienia. Kolejne zapytania do niego kończą się natychmiast. Błąd 403 (portal nas odrzuca) liczy się od razu jako nieudane zapytanie, bez ponowień. Kolejne 10 kart z rzędu bez danych też blokuje portal.
+3. **Dalszy ciąg.** Skrypt idzie do następnych kroków z tym, co już pobrał, a drugi portal działa normalnie. W podsumowaniu (`wyniki.md` i strona) pojawia się „Uwaga, wyniki mogą być niepełne” z opisem, co poszło nie tak. Oferty, których karty nie udało się pobrać, są pomijane tym razem, a kolejne uruchomienie dociągnie brakujące (pobrane karty są w `stan.json`).
+
+Trzeba pamiętać, że oferty z przerwanego wyszukiwania, których nie pobrano, nie ma w rankingu z tego uruchomienia. Przy blokadzie od razu na pierwszej stronie portal nie wnosi ofert wcale.
 
 ## Rozwiązywanie problemów
 
@@ -306,8 +385,9 @@ Przykład: wyszukiwanie z 200 ofertami i 3 miejscami to przy pierwszym uruchomie
 | `Brak config.toml` | Nie ma pliku ustawień | Skopiuj `config.example.toml` do `config.toml` i uzupełnij |
 | `Uzupełnij api_key` | Pusty klucz w `config.toml` | Wpisz klucz Google |
 | `Miejsce "…": wpisz współrzędne` | Zły format `wspolrzedne` | Wpisz `"szerokość, długość"`, np. `"52.2297, 21.0122"` |
-| `Nie udało się odczytać strony 1 wyników z Otodom (HTTP 403)` | Otodom blokuje zapytania | Odczekaj kilka godzin, zawęź wyszukiwanie |
-| `10 ogłoszeń z rzędu bez danych` | Otodom blokuje zapytania w trakcie | Uruchom ponownie później; postęp jest zapisany |
+| `Uwaga, wyniki mogą być niepełne: …` w podsumowaniu | Portal zwracał błędy (429, 403, 5xx) albo minął limit czasu | Nic nie psuje się: ranking powstał z tego, co udało się pobrać. Uruchom ponownie później, brakujące karty zostaną dociągnięte |
+| `Nie pobrano żadnych ofert` | Żaden portal nie odpowiedział albo adresy są błędne | Sprawdź adresy w przeglądarce, odczekaj kilka godzin |
+| `Nieznany portal w adresie wyszukiwania` | Adres spoza obsługiwanych portali | Użyj adresu z otodom.pl, nieruchomosci-online.pl albo olx.pl |
 | `Brak ofert do policzenia` | Wszystkie oferty odpadły w filtrach | Poluzuj filtry na Otodom albo `max_rok_budowy` |
 | `Błąd Google Routes API (HTTP 403)` | Routes API nie jest włączone albo brak konta rozliczeniowego | Sprawdź projekt w Google Cloud Console |
 | `Wykorzystano limit …` | Skrypt doszedł do swojego miesięcznego limitu | Brakujące czasy i trasy policzy w kolejnym miesiącu |
@@ -330,7 +410,7 @@ python docs/mock/zrzuty.py         # docs/img/*.jpg w rozdzielczości 1440×900
 
 ## Źródła danych i licencje
 
-- **Oferty:** [Otodom](https://www.otodom.pl/), wyłącznie do prywatnego użytku.
+- **Oferty:** [Otodom](https://www.otodom.pl/), [Nieruchomości Online](https://www.nieruchomosci-online.pl/) i [OLX](https://www.olx.pl/nieruchomosci/), wyłącznie do prywatnego użytku.
 - **Czasy i trasy:** Google Maps Platform, Routes API. Wyniki są przechowywane najwyżej 30 dni.
 - **Okolica:** © współtwórcy OpenStreetMap, licencja ODbL[^4], wycinki z Geofabrik[^5]. Okolica pochodzi z wycinka, a nie z zapytań na żywo, bo publiczne serwery Overpass API są stale przeciążone[^6].
 - **Podkład mapy:** Esri World Street Map i World Imagery, z atrybucją na mapie. Kafelki OpenStreetMap nie są używane, bo ich serwery wymagają nagłówka Referer[^7], którego strona otwierana z dysku nie wysyła.
