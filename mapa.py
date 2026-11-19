@@ -751,12 +751,18 @@ function groupMarker(group) {
     marker.bindPopup(() => popupFor(first), { maxWidth: 280, autoPanPadding: [30, 30] });
     marker.on("click", () => activate(first.id, { fromMap: true }));
   } else {
-    marker.bindPopup(() => groupPopup(group), { minWidth: 260, maxWidth: 320, autoPanPadding: [30, 30] });
+    marker.bindPopup(() => groupPopup(group), {
+      minWidth: 260, maxWidth: 320, autoPanPadding: [30, 30], className: "group-popup-wrap",
+      closeOnClick: false,  // klik w mapę go nie zamyka
+    });
+    marker.on("popupopen", () => { openGroup = group; });
+    marker.on("popupclose", () => { if (openGroup === group) openGroup = null; });
   }
   return marker;
 }
 function placeMarkers(offers) {  // znaczniki tylko dla widocznych ofert, pogrupowane według miejsca
   offerLayer.clearLayers();
+  openGroup = null;
   groupOf.clear();
   for (const group of groupByLocation(offers)) {
     group.marker = groupMarker(group);
@@ -1226,12 +1232,24 @@ function syncControls(item, offer) {
   collapse.title = isActive ? "Zwiń" : "Rozwiń";
 }
 
+let openGroup = null;  // grupa, której lista jest otwarta; zamyka ją krzyżyk albo wybór oferty spoza grupy
+function closeSinglePopup() {
+  if (!openGroup) map.closePopup();
+}
+
 function refresh(id) {
   const offer = byId.get(id);
   const group = groupOf.get(id);
   if (group) {
+    const reopen = group.marker.isPopupOpen();
+    const scroll = group.marker.getPopup()?.getElement()?.querySelector(".group-list")?.scrollTop || 0;
     group.marker.setIcon(groupIcon(group)).setZIndexOffset(group.offers.some(o => o.id === activeId) ? 900 : 0);
-    if (group.offers.length > 1 && group.marker.isPopupOpen()) group.marker.setPopupContent(groupPopup(group));
+    // setIcon przywiązuje dymek od nowa i go zamyka: przywracamy go ze świeżą listą w tym samym miejscu przewinięcia
+    if (reopen && group.offers.length > 1) {
+      group.marker.openPopup();
+      const list = group.marker.getPopup()?.getElement()?.querySelector(".group-list");
+      if (list) list.scrollTop = scroll;
+    }
   }
   const item = items.get(id);
   if (item) syncControls(item, offer);
@@ -1246,12 +1264,20 @@ function deactivate() {  // zwinięcie: karta bez szczegółów, mapa bez trasy,
   routeLayer.clearLayers();
   poiLayer.clearLayers();
   walkCircle.remove();
-  map.closePopup();
+  closeSinglePopup();
   for (const section of items.get(id)?.querySelectorAll(".trips, .details, .nearby") || []) section.remove();
   refresh(id);
 }
 
+function keepInView(offer) {  // zoom zostaje; mapa przesuwa się tylko, gdy oferta wyszła poza środkową trzecią część
+  const size = map.getSize(), point = map.latLngToContainerPoint([offer.lat, offer.lng]);
+  const shift = (value, length) => value < length / 3 ? value - length / 3 : value > length * 2 / 3 ? value - length * 2 / 3 : 0;
+  const dx = shift(point.x, size.x), dy = shift(point.y, size.y);
+  if (dx || dy) map.panBy([dx, dy], { animate: !reduceMotion, duration: 0.5 });
+}
+
 function activate(id, { fromMap = false } = {}) {
+  if (openGroup && !openGroup.offers.some(offer => offer.id === id)) openGroup.marker.closePopup();  // oferta spoza grupy
   const previous = activeId;
   activeId = id;
   if (previous && previous !== id) {
@@ -1272,10 +1298,8 @@ function activate(id, { fromMap = false } = {}) {
   walkCircle.setLatLng([offer.lat, offer.lng]).addTo(map);
   if (!fromMap && groupOf.has(id)) {
     // bez dymka: dane oferty są na karcie, a dymek zasłaniałby okolicę
-    map.closePopup();
-    const zoom = Math.max(map.getZoom(), 15);  // przy 15 mieści się cały promień okolicy (1 km)
-    if (reduceMotion) map.setView([offer.lat, offer.lng], zoom);
-    else map.flyTo([offer.lat, offer.lng], zoom, { duration: 0.6 });
+    closeSinglePopup();
+    keepInView(offer);
   }
   // rozwinięta karta bywa wyższa niż lista: początek karty na górę, szczegóły czyta się w dół
   items.get(id)?.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" });
