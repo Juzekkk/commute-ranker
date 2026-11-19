@@ -131,6 +131,36 @@ Oferta tańsza o 300 zł, ale z dojazdem do pracy dłuższym o 15 minut, kosztuj
 
 Czasy dotyczą porannego szczytu we wtorek. Dla wizyt wieczornych i weekendowych to przybliżenie, bo rozkłady są wtedy rzadsze.
 
+### Nieruchomości Online
+
+Adresy z `nieruchomosci-online.pl` działają tak samo jak z Otodom: filtry ustawiasz na stronie portalu i kopiujesz adres wyników (np. `https://warszawa.nieruchomosci-online.pl/mieszkania,wynajem/` albo adres z `szukaj.html?...`). Różnice:
+
+- ze strony wyników skrypt bierze tytuł, cenę, metraż, pokoje i piętro, a z karty oferty współrzędne (razem z informacją, czy lokalizacja jest przybliżona), rok budowy, piętro budynku, windę i dodatki;
+- zdjęcia: wszystkie, z danych osadzonych w stronie oferty (duży rozmiar);
+- brakuje ogrzewania, kaucji w części ofert, ogłoszeniodawcy i daty dodania, więc te pola są puste;
+- inwestycje deweloperskie bez współrzędnych na karcie są pomijane („nie udało się pobrać karty”).
+
+To samo mieszkanie bywa na obu portalach. Jeśli oferty z różnych portali mają tę samą cenę, metraż różniący się najwyżej o 1 m² i leżą nie dalej niż 60 m od siebie, skrypt zostawia tę z Otodom, a przy niej w sekcji Szczegóły pojawia się „Także na” z odnośnikiem do drugiego portalu. W podsumowaniu jest liczba scalonych ofert.
+
+### OLX
+
+Adres z działu Nieruchomości na `olx.pl` wklejasz jak każdy inny, np.:
+
+```toml
+"https://www.olx.pl/nieruchomosci/mieszkania/sprzedaz/warszawa/?search%5Bdist%5D=5&search%5Bfilter_float_price:to%5D=1200000&search%5Bfilter_float_m:from%5D=70&search%5Bfilter_enum_rooms%5D%5B0%5D=four"
+```
+
+Wszystkie filtry (cena, metraż, pokoje, odległość od miasta) ustawiasz na OLX i kopiujesz adres. Odmienności:
+
+- strona wyników OLX zawiera komplet danych (cena, metraż, pokoje, piętro, rynek, wszystkie zdjęcia, współrzędne), więc skrypt **nie otwiera kart ofert** i pobieranie jest szybkie: ok. 40 ofert na zapytanie, bez przerw między ofertami;
+- korzystamy tylko ze stron wyników, nie z API OLX;
+- OLX często ukrywa dokładny adres: takie oferty mają oznaczenie „przybliżona” (punkt jest wtedy orientacyjny, a ranking z niego liczy czas dojazdu);
+- rok budowy, ogrzewania, winda, kaucja i piętro budynku nie są podawane, więc filtr `max_rok_budowy` ich nie dotyczy, a te pola są puste;
+- rodzaj (mieszkanie albo dom) skrypt rozpoznaje po adresie: `/domy/` w ścieżce to domy;
+- na OLX „4 i więcej pokoi” jest jedną opcją, więc oferty pokazują `4+`; nazw sprzedających nie zapisujemy, tylko czy to osoba prywatna, czy firma.
+
+Wyszukiwania bez ostrych filtrów dają tysiące ofert, a każda unikalna lokalizacja zużywa parę z darmowego limitu Google ([zobacz niżej](#koszty-i-limity-google)), więc filtry na OLX warto ustawić ciasno.
+
 ### okolica.py
 
 Skrypt pobiera z Geofabrik wycinek OpenStreetMap dla województwa mazowieckiego (kilkaset MB, ponownie dopiero po 30 dniach) i wyciąga z niego biblioteką `osmium`:
@@ -172,36 +202,6 @@ Cały nagłówek karty oferty rozwija ją i zwija: klikasz gdziekolwiek poza lin
 **Okolica.** Najbliższe miejsce każdego rodzaju w promieniu 1 km (dla metra i kolei 2 km) z odległością w linii prostej i orientacyjnym czasem pieszo. Kliknięcie pozycji pokazuje to miejsce na mapie.
 
 ![Sekcja Okolica: najbliższy supermarket, sklep, metro, kolej, tramwaj, park, siłownia, apteka i paczkomat z odległościami](docs/img/okolica.jpg)
-
-### Nieruchomości Online
-
-Adresy z `nieruchomosci-online.pl` działają tak samo jak z Otodom: filtry ustawiasz na stronie portalu i kopiujesz adres wyników (np. `https://warszawa.nieruchomosci-online.pl/mieszkania,wynajem/` albo adres z `szukaj.html?...`). Różnice:
-
-- ze strony wyników skrypt bierze tytuł, cenę, metraż, pokoje i piętro, a z karty oferty współrzędne (razem z informacją, czy lokalizacja jest przybliżona), rok budowy, piętro budynku, windę i dodatki;
-- zdjęcia: wszystkie, z danych osadzonych w stronie oferty (duży rozmiar);
-- brakuje ogrzewania, kaucji w części ofert, ogłoszeniodawcy i daty dodania, więc te pola są puste;
-- inwestycje deweloperskie bez współrzędnych na karcie są pomijane („nie udało się pobrać karty”).
-
-To samo mieszkanie bywa na obu portalach. Jeśli oferty z różnych portali mają tę samą cenę, metraż różniący się najwyżej o 1 m² i leżą nie dalej niż 60 m od siebie, skrypt zostawia tę z Otodom, a przy niej w sekcji Szczegóły pojawia się „Także na” z odnośnikiem do drugiego portalu. W podsumowaniu jest liczba scalonych ofert.
-
-### OLX
-
-Adres z działu Nieruchomości na `olx.pl` wklejasz jak każdy inny, np.:
-
-```toml
-"https://www.olx.pl/nieruchomosci/mieszkania/sprzedaz/warszawa/?search%5Bdist%5D=5&search%5Bfilter_float_price:to%5D=1200000&search%5Bfilter_float_m:from%5D=70&search%5Bfilter_enum_rooms%5D%5B0%5D=four"
-```
-
-Wszystkie filtry (cena, metraż, pokoje, odległość od miasta) ustawiasz na OLX i kopiujesz adres. Odmienności:
-
-- strona wyników OLX zawiera komplet danych (cena, metraż, pokoje, piętro, rynek, wszystkie zdjęcia, współrzędne), więc skrypt **nie otwiera kart ofert** i pobieranie jest szybkie: ok. 40 ofert na zapytanie, bez przerw między ofertami;
-- korzystamy tylko ze stron wyników, nie z API OLX;
-- OLX często ukrywa dokładny adres: takie oferty mają oznaczenie „przybliżona” (punkt jest wtedy orientacyjny, a ranking z niego liczy czas dojazdu);
-- rok budowy, ogrzewania, winda, kaucja i piętro budynku nie są podawane, więc filtr `max_rok_budowy` ich nie dotyczy, a te pola są puste;
-- rodzaj (mieszkanie albo dom) skrypt rozpoznaje po adresie: `/domy/` w ścieżce to domy;
-- na OLX „4 i więcej pokoi” jest jedną opcją, więc oferty pokazują `4+`; nazw sprzedających nie zapisujemy, tylko czy to osoba prywatna, czy firma.
-
-Wyszukiwania bez ostrych filtrów dają tysiące ofert, a każda unikalna lokalizacja zużywa parę z darmowego limitu Google ([zobacz niżej](#koszty-i-limity-google)), więc filtry na OLX warto ustawić ciasno.
 
 ### Mieszkania i domy
 
@@ -335,6 +335,21 @@ Znak ≈ oznacza przybliżoną lokalizację oferty.
 
 Czasy są zapamiętywane dla pary (punkt oferty, współrzędne miejsca). Zmiana `nazwa`, `razy_w_tygodniu` albo `max_minut` nie kosztuje żadnych zapytań, bo ranking przelicza się z zapamiętanych czasów. Nowe miejsce albo zmienione współrzędne oznaczają nowe zapytania dla wszystkich ofert.
 
+### Pojedyncze wyszukiwania
+
+Każde wyszukiwanie w `[wyszukiwania]` ma nazwę. Bez argumentów `python dojazdy.py` pobiera wszystkie. Z nazwami pobiera tylko wskazane:
+
+```bash
+python dojazdy.py olx-m               # tylko OLX, mieszkania
+python dojazdy.py otodom-m otodom-d   # kilka naraz
+```
+
+Pozostałe wyszukiwania nie są pytane o nic: ranking, mapa i `wyniki.*` zawierają je dalej, z ofertami zapisanymi przy ich ostatnim pobraniu (`ogloszenia.json`). Cała reszta potoku działa jak zwykle (zapamiętane karty, czasy i trasy). W podsumowaniu jest wtedy informacja, z kiedy pochodzą oferty z nieodświeżanych wyszukiwań. Dzięki temu można np. odświeżać OLX codziennie, a Otodom raz w tygodniu.
+
+- **Pierwsze uruchomienie musi być pełne**, bez argumentów: dopiero ono zapisuje oferty wszystkich wyszukiwań. Częściowe uruchomienie wyszukiwania, którego jeszcze nie pobrano, pomija je w rankingu i mówi o tym w podsumowaniu.
+- Zmiana adresu przy nazwie unieważnia zapisane oferty tego wyszukiwania. Błędna nazwa kończy się listą nazw z `config.toml`.
+- Gdy pobieranie wyszukiwania się nie powiedzie (np. błąd 429), poprzednio zapisane oferty tego wyszukiwania zostają, a nowe je uzupełniają.
+
 ## Pliki tworzone przez skrypty
 
 Wszystkie są w `.gitignore`, bo zawierają dane pobrane z sieci albo Twoje wyniki.
@@ -372,31 +387,6 @@ Przykład: wyszukiwanie z 200 ofertami i 3 miejscami to przy pierwszym uruchomie
 - **Portale nie mają publicznego API.** Skrypt czyta strony tak jak przeglądarka, z przerwami 1–2 s między zapytaniami. Regulamin portalu nie przewiduje automatycznego pobierania ofert, więc to narzędzie wyłącznie do prywatnego użytku.
 - **Okolica nie wysyła zapytań.** Dane pochodzą z wycinka pobieranego raz w miesiącu, a strona liczy odległości lokalnie.
 
-### Pojedyncze wyszukiwania
-
-Każde wyszukiwanie w `[wyszukiwania]` ma nazwę. Bez argumentów `python dojazdy.py` pobiera wszystkie. Z nazwami pobiera tylko wskazane:
-
-```bash
-python dojazdy.py olx-m               # tylko OLX, mieszkania
-python dojazdy.py otodom-m otodom-d   # kilka naraz
-```
-
-Pozostałe wyszukiwania nie są pytane o nic: ranking, mapa i `wyniki.*` zawierają je dalej, z ofertami zapisanymi przy ich ostatnim pobraniu (`ogloszenia.json`). Cała reszta potoku działa jak zwykle (zapamiętane karty, czasy i trasy). W podsumowaniu jest wtedy informacja, z kiedy pochodzą oferty z nieodświeżanych wyszukiwań. Dzięki temu można np. odświeżać OLX codziennie, a Otodom raz w tygodniu.
-
-- **Pierwsze uruchomienie musi być pełne**, bez argumentów: dopiero ono zapisuje oferty wszystkich wyszukiwań. Częściowe uruchomienie wyszukiwania, którego jeszcze nie pobrano, pomija je w rankingu i mówi o tym w podsumowaniu.
-- Zmiana adresu przy nazwie unieważnia zapisane oferty tego wyszukiwania. Błędna nazwa kończy się listą nazw z `config.toml`.
-- Gdy pobieranie wyszukiwania się nie powiedzie (np. błąd 429), poprzednio zapisane oferty tego wyszukiwania zostają, a nowe je uzupełniają.
-
-### Błędy portali (429 i limit czasu)
-
-Portal, który uzna, że pytamy za często, odpowiada „too many requests” (HTTP 429) albo błędem serwera. Skrypt nie czeka wtedy w nieskończoność na komplet ofert (`siec.py`):
-
-1. **Ponowienia.** Zapytanie jest ponawiane do 4 razy z rosnącą przerwą (5, 10 i 20 s). Jeśli portal poda w nagłówku `Retry-After`, skrypt czeka tyle, ile on prosi, ale nie dłużej niż minutę. Po błędzie 429 skrypt zwalnia też tempo kolejnych zapytań.
-2. **Rezygnacja z portalu.** Po 3 nieudanych zapytaniach z rzędu (każde po wszystkich ponowieniach) albo po przekroczeniu limitu czasu portal jest uznany za zablokowany do końca uruchomienia. Kolejne zapytania do niego kończą się natychmiast. Błąd 403 (portal nas odrzuca) liczy się od razu jako nieudane zapytanie, bez ponowień. Kolejne 10 kart z rzędu bez danych też blokuje portal.
-3. **Dalszy ciąg.** Skrypt idzie do następnych kroków z tym, co już pobrał, a drugi portal działa normalnie. W podsumowaniu (`wyniki.md` i strona) pojawia się „Uwaga, wyniki mogą być niepełne” z opisem, co poszło nie tak. Oferty, których karty nie udało się pobrać, są pomijane tym razem, a kolejne uruchomienie dociągnie brakujące (pobrane karty są w `stan.json`).
-
-Trzeba pamiętać, że oferty z przerwanego wyszukiwania, których nie pobrano, nie ma w rankingu z tego uruchomienia. Przy blokadzie od razu na pierwszej stronie portal nie wnosi ofert wcale.
-
 ## Rozwiązywanie problemów
 
 | Komunikat | Przyczyna | Co zrobić |
@@ -415,6 +405,16 @@ Trzeba pamiętać, że oferty z przerwanego wyszukiwania, których nie pobrano, 
 | `Nie umiem odczytać wykluczenia.json` | Uszkodzony plik z obszarami | Usuń plik i narysuj obszary od nowa |
 | `Brak okolica.json` | Nie uruchomiono `okolica.py` | Uruchom `python okolica.py`, potem `python mapa.py` |
 | Na stronie: „Tras jeszcze nie pobrano” | Trasy nie zmieściły się w limicie albo był błąd | Uruchom ponownie `python dojazdy.py` |
+
+### Błędy portali (429 i limit czasu)
+
+Portal, który uzna, że pytamy za często, odpowiada „too many requests” (HTTP 429) albo błędem serwera. Skrypt nie czeka wtedy w nieskończoność na komplet ofert (`siec.py`):
+
+1. **Ponowienia.** Zapytanie jest ponawiane do 4 razy z rosnącą przerwą (5, 10 i 20 s). Jeśli portal poda w nagłówku `Retry-After`, skrypt czeka tyle, ile on prosi, ale nie dłużej niż minutę. Po błędzie 429 skrypt zwalnia też tempo kolejnych zapytań.
+2. **Rezygnacja z portalu.** Po 3 nieudanych zapytaniach z rzędu (każde po wszystkich ponowieniach) albo po przekroczeniu limitu czasu portal jest uznany za zablokowany do końca uruchomienia. Kolejne zapytania do niego kończą się natychmiast. Błąd 403 (portal nas odrzuca) liczy się od razu jako nieudane zapytanie, bez ponowień. Kolejne 10 kart z rzędu bez danych też blokuje portal.
+3. **Dalszy ciąg.** Skrypt idzie do następnych kroków z tym, co już pobrał, a drugi portal działa normalnie. W podsumowaniu (`wyniki.md` i strona) pojawia się „Uwaga, wyniki mogą być niepełne” z opisem, co poszło nie tak. Oferty, których karty nie udało się pobrać, są pomijane tym razem, a kolejne uruchomienie dociągnie brakujące (pobrane karty są w `stan.json`).
+
+Trzeba pamiętać, że oferty z przerwanego wyszukiwania, których nie pobrano, nie ma w rankingu z tego uruchomienia. Przy blokadzie od razu na pierwszej stronie portal nie wnosi ofert wcale.
 
 ## Zrzuty ekranu i dane przykładowe
 
