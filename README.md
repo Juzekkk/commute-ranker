@@ -213,11 +213,15 @@ Podpowiedzi o obsłudze są pod „Podsumowanie i podpowiedzi” w nagłówku li
 
 Przycisk ze słońcem lub księżycem obok tytułu przełącza motyw. Domyślnie strona podąża za ustawieniem systemu, a Twój wybór jest zapamiętany. W motywie nocnym ciemne są panel boczny i dymki na mapie. Sama mapa, znaczki i przyciski mapy zostają takie jak w dziennym, żeby nie tracić nazw ulic i szczegółów.
 
+![Motyw nocny: ciemny panel boczny z rozwiniętą ofertą i ciemne dymki, mapa i znaczki bez zmian](docs/img/motyw-nocny.jpg)
+
 ### Wykluczanie obszarów
 
 Przycisk „Wyklucz obszar” w rzędzie filtrów (obok „Wszystkie”, „Zaznaczone” i „Nowe”) włączasz lasso: przytrzymaj przycisk myszy, zakreśl na mapie obszar, który Cię nie interesuje (np. okolice lotniska), i puść. Obszar zaznacza się lekką czerwienią, a oferty z jego wnętrza znikają z listy i mapy. Kliknięcie obszaru pozwala go usunąć, „Cofnij ostatni” i „Usuń wszystkie” też działają. Esc kończy rysowanie.
 
 Obszary zapisują się od razu w `wykluczenia.json`. `dojazdy.py` czyta ten plik, więc przy kolejnym uruchomieniu nie liczy dla takich ofert czasów ani tras i nie zapisuje ich zdjęć ani parametrów. Otodom nie podaje współrzędnych w wynikach wyszukiwania, więc karta nowej oferty jest otwierana jeszcze raz, żeby sprawdzić, czy leży w obszarze: to jedyny koszt, a Google nie jest pytany wcale. Obszary można rysować przed pierwszym uruchomieniem `dojazdy.py`.
+
+![Obszar wykluczony zakreślony lassem: czerwony prostokąt na mapie, a dwie oferty z jego wnętrza zniknęły z listy; w nagłówku licznik obszarów i ukrytych ofert](docs/img/wykluczanie.jpg)
 
 ### Sortowanie i kilka ofert w jednym miejscu
 
