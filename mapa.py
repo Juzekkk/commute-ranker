@@ -126,7 +126,7 @@ TEMPLATE = r"""<!doctype html>
   .filters button.zone-btn:disabled { opacity: .55; cursor: not-allowed; }
   .zones { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 10px; font-size: 13px; color: var(--muted); }
   .zones[hidden] { display: none; }
-  .zones button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .zones button:focus-visible, .kinds button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   .zones-hint { flex-basis: 100%; margin: 0; }
   .zones-hint[hidden] { display: none; }
   .leaflet-container.drawing, .leaflet-container.drawing .leaflet-interactive { cursor: crosshair; touch-action: none; }
@@ -144,6 +144,24 @@ TEMPLATE = r"""<!doctype html>
     border: 1px solid var(--rule);
     border-radius: 6px;
   }
+  .kinds { display: flex; flex: none; gap: 4px; }
+  .kinds[hidden] { display: none; }
+  .kinds button {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    font: inherit;
+    font-size: 13px;
+    border-radius: 6px;
+    border: 1px solid var(--rule);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .kinds button[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--surface); }
+  .kinds svg, .kind svg { width: 16px; height: 16px; }
+  .kind { display: inline-flex; align-items: center; color: var(--muted); }
   .sort select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
   details { margin-top: 8px; font-size: 13px; color: var(--muted); }
   summary { cursor: pointer; }
@@ -562,10 +580,10 @@ TEMPLATE = r"""<!doctype html>
       <select id="sort">
         <option value="week">czasu w drodze</option>
         <option value="price">ceny, od najniższej</option>
-        <option value="total">ceny z czynszem, od najniższej</option>
         <option value="m2">ceny za m², od najniższej</option>
         <option value="listed">daty dodania, od najnowszych</option>
       </select>
+      <div class="kinds" id="kinds" role="group" aria-label="Rodzaj nieruchomości" hidden></div>
     </div>
     <details>
       <summary>Podsumowanie i podpowiedzi</summary>
@@ -619,6 +637,23 @@ for (const park of nearbyData?.parks || []) {  // prostokąt otaczający: szybki
 }
 
 data.places.forEach((place, i) => { place.color = LINE_COLORS[i % LINE_COLORS.length]; });
+const KINDS = [
+  { key: "flat", label: "Mieszkania", one: "Mieszkanie", icon: "building" },
+  { key: "house", label: "Domy", one: "Dom", icon: "house" },
+];
+const KINDS_KEY = "mieszkania-wedlug-dojazdu:rodzaje";
+const kindOf = offer => offer.type === "house" ? "house" : "flat";
+const kindsPresent = KINDS.filter(kind => data.offers.some(offer => kindOf(offer) === kind.key));
+const hasKinds = kindsPresent.length > 1;  // przełącznik ma sens tylko, gdy są oba rodzaje
+const kinds = { flat: true, house: true };
+try {
+  const saved = JSON.parse(localStorage.getItem(KINDS_KEY));
+  if (saved && hasKinds && (saved.flat || saved.house)) Object.assign(kinds, { flat: !!saved.flat, house: !!saved.house });
+} catch { /* odczyt niedostępny */ }
+function kindSvg(kind) {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[kind.icon]}</svg>`;
+}
 const byId = new Map(data.offers.map(offer => [offer.id, offer]));
 const groupOf = new Map();  // id oferty -> grupa ofert w tym samym miejscu (z jej znacznikiem)
 const items = new Map();
@@ -1414,6 +1449,13 @@ function card(offer) {
   const week = el("span", "week");
   week.append(el("span", "num", String(offer.rank)), duration(offer.week), el("span", "per", "w drodze tygodniowo"));
   const facts = el("span", "facts");
+  if (hasKinds) {
+    const kind = KINDS.find(k => k.key === kindOf(offer));
+    const icon = el("span", "kind");
+    icon.innerHTML = kindSvg(kind);
+    icon.title = kind.one;
+    facts.append(icon);
+  }
   facts.append(el("span", "price", priceText(offer)));
   if (offer.pricePerM2) facts.append(el("span", null, `${numbers.format(offer.pricePerM2)} zł/m²`));
   if (offer.area) facts.append(el("span", null, `${offer.area} m²`));
@@ -1451,7 +1493,6 @@ const SORT_KEY = "mieszkania-wedlug-dojazdu:sortowanie";
 const SORTS = {  // wartość do porównania; brak danych ląduje na końcu listy
   week: offer => offer.week,
   price: offer => offer.price,
-  total: offer => offer.price + (offer.rent || 0),
   m2: offer => offer.pricePerM2 || (offer.area ? offer.price / offer.area : null),
   listed: offer => offer.listed ? -Date.parse(offer.listed) : null,
 };
@@ -1481,7 +1522,39 @@ function visibleOffers() {
   return sorted(offers);
 }
 
+const kindsBox = document.getElementById("kinds");
+const kindButtons = new Map();
+if (hasKinds) {
+  kindsBox.hidden = false;
+  for (const kind of KINDS) {
+    const button = el("button");
+    button.type = "button";
+    button.innerHTML = kindSvg(kind);
+    button.append(el("span", "count"));
+    button.addEventListener("click", () => {
+      const other = KINDS.find(k => k !== kind);
+      kinds[kind.key] = !kinds[kind.key];
+      if (!kinds.flat && !kinds.house) kinds[other.key] = true;  // zawsze coś zostaje na liście
+      try { localStorage.setItem(KINDS_KEY, JSON.stringify(kinds)); } catch { /* zapis niedostępny */ }
+      render({ fit: true });
+    });
+    kindButtons.set(kind.key, button);
+    kindsBox.append(button);
+  }
+}
+function updateKinds() {
+  for (const kind of KINDS) {
+    const button = kindButtons.get(kind.key);
+    if (!button) continue;
+    const count = data.offers.filter(offer => !excluded.has(offer.id) && kindOf(offer) === kind.key).length;
+    button.querySelector(".count").textContent = count;
+    button.setAttribute("aria-pressed", String(kinds[kind.key]));
+    button.title = `${kind.label}: ${kinds[kind.key] ? "ukryj" : "pokaż"}`;
+  }
+}
+
 function updateCounts() {
+  updateKinds();
   const offers = liveOffers();
   document.getElementById("count-all").textContent = offers.length;
   document.getElementById("count-selected").textContent = offers.filter(offer => selected.has(offer.id)).length;
@@ -1543,7 +1616,7 @@ function ringContains(ring, lat, lng) {
   return inside;
 }
 function liveOffers() {
-  return data.offers.filter(offer => !excluded.has(offer.id));
+  return data.offers.filter(offer => !excluded.has(offer.id) && kinds[kindOf(offer)]);
 }
 function zonePopup(index) {
   const box = el("div", "zone-popup");
