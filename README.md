@@ -2,11 +2,11 @@
 
 Ranking ofert mieszkań i domów z Otodom, Nieruchomości Online i OLX według łącznego czasu, który co tydzień spędzisz w komunikacji miejskiej, jeżdżąc do swoich miejsc: pracy, uczelni, rodziców, na siłownię. Cena i metraż mówią, ile płacisz za mieszkanie. Ten ranking pokazuje, ile czasu będzie Cię kosztowało mieszkanie w tym miejscu.
 
-Wynik to tabela (Markdown i CSV) oraz strona `mapa.html` z listą ofert obok mapy. Przy każdej ofercie są zdjęcia, rzut, warianty przejazdu z przesiadkami i najbliższe sklepy, przystanki i parki.
+Wynik to tabela (Markdown i CSV) oraz strona `mapa.html` z listą ofert obok mapy. Przy każdej ofercie są zdjęcia, warianty przejazdu z przesiadkami i najbliższe sklepy, przystanki i parki.
 
 ![Lista ofert uszeregowana według tygodniowego czasu w drodze, z wyborem sortowania, obok mapa Warszawy z ponumerowanymi ofertami, wspólnym znacznikiem kilku ofert z jednego budynku i trzema miejscami: Praca, Siłownia, Rodzice](docs/img/lista-i-mapa.jpg)
 
-<sub>Wszystkie zrzuty pokazują fikcyjne dane wygenerowane przez <code>docs/mock/generuj_mock.py</code>: oferty, zdjęcia, rzuty i trasy są wymyślone.</sub>
+<sub>Wszystkie zrzuty pokazują fikcyjne dane wygenerowane przez <code>docs/mock/generuj_mock.py</code>: oferty, zdjęcia i trasy są wymyślone.</sub>
 
 Projekt jest ustawiony pod Warszawę. W innym mieście wystarczy zmienić adres wyszukiwania i wycinek danych OpenStreetMap (zobacz [Inny region](#inny-region)).
 
@@ -43,7 +43,7 @@ cp config.example.toml config.toml # Windows: copy config.example.toml config.to
 # uruchomienie
 python dojazdy.py   # oferty, czasy dojazdu, ranking, warianty tras (python dojazdy.py olx-m: tylko jedno wyszukiwanie)
 python okolica.py   # sklepy, przystanki, parki (raz w miesiącu)
-python mapa.py      # składa mapa.html i otwiera ją w przeglądarce
+python mapa.py      # składa mapa.html i otwiera stronę w przeglądarce (lokalny serwer, Ctrl+C kończy)
 ```
 
 Pierwsze uruchomienie `dojazdy.py` trwa najdłużej: skrypt otwiera kartę każdej oferty z przerwą 1–2 s, więc 200 ofert to ok. 8 minut. Kolejne uruchomienia pobierają tylko nowe oferty i brakujące czasy.
@@ -151,17 +151,19 @@ Obiekty zapisane w OSM jako budynki dostają punkt w środku obrysu. Obrysy park
 
 ### mapa.py
 
-Skrypt niczego nie pobiera. Wkleja `wyniki.json` i przycięte `okolica.json` do jednego pliku HTML, który działa z dysku, bez serwera. Najbliższe miejsca każdej oferty strona liczy sama w przeglądarce.
+Skrypt niczego nie pobiera z sieci. Wkleja `wyniki.json` i przycięte `okolica.json` do strony, a najbliższe miejsca każdej oferty strona liczy sama w przeglądarce.
+
+Domyślnie `python mapa.py` uruchamia lokalny serwer pod adresem `http://127.0.0.1:8765` (dostępny tylko z tego komputera, Ctrl+C kończy). Serwer jest potrzebny do jednej rzeczy: zapisywania obszarów wykluczonych w pliku. Port jest stały, bo przeglądarka pamięta zaznaczone oferty i ustawienia osobno dla każdego adresu. `python mapa.py --plik` tylko zapisuje `mapa.html` i otwiera go z dysku: wszystko działa, ale obszarów nie da się wtedy rysować. Bez `wyniki.json` strona pokazuje same miejsca z `config.toml`, więc obszary można zaznaczyć przed pierwszym uruchomieniem `dojazdy.py`.
 
 ## Strona z mapą
 
 Lista ofert stoi obok mapy, a numery ofert są wspólne dla listy i mapy. Na karcie oferty są: tygodniowy czas w drodze, czasy do każdego miejsca w kolorze tego miejsca, cena z czynszem, cena za m², metraż, liczba pokoi, rok budowy i tytuł. Czerwona kropka przy numerze oznacza ofertę nową od poprzedniego uruchomienia, a szeroka, półprzezroczysta obwódka wokół znacznika oznacza przybliżoną lokalizację.
 
-Po kliknięciu oferty mapa przybliża się do niej i rysuje okrąg o promieniu 500 m (ok. 6 minut pieszo), a lista rozwija trzy sekcje.
+Cały nagłówek karty oferty rozwija ją i zwija: klikasz gdziekolwiek poza linkami i gwiazdką. Gwiazdka po prawej zaznacza ofertę, a numer w nagłówku karty jest tym samym, który widać na mapie. Po rozwinięciu z listy mapa nie zmienia powiększenia, a jeśli oferta leży poza środkową trzecią częścią mapy, przesuwa się tak, żeby w niej była. Rysuje okrąg o promieniu 500 m (ok. 6 minut pieszo), a lista pokazuje trzy sekcje. Każdą z nich zwija się osobno, kliknięciem w jej tytuł. Domyślnie Szczegóły są rozwinięte, a Dojazdy i Okolica zwinięte. Zmiana ustawienia jest pamiętana i obowiązuje kolejne oferty.
 
-**Szczegóły.** Galeria wszystkich zdjęć (kliknięcie lewej lub prawej połowy przewija), pod nią rzut, jeśli ogłoszeniodawca go dodał, a dalej piętro z windą, stan, budynek, rynek, ogrzewanie, kaucja, termin dostępności, wyposażenie i dodatki.
+**Szczegóły.** Galeria wszystkich zdjęć z ogłoszenia, także rzutu (kliknięcie lewej lub prawej połowy przewija), a pod nią piętro z windą, stan, budynek, rynek, ogrzewanie, kaucja, termin dostępności, wyposażenie i dodatki.
 
-![Rozwinięta oferta: galeria zdjęć i rzut mieszkania na liście, a na mapie okrąg 500 m wokół oferty z najbliższymi sklepami, przystankami i parkiem](docs/img/szczegoly.jpg)
+![Rozwinięta oferta: galeria zdjęć na liście, a na mapie okrąg 500 m wokół oferty z najbliższymi sklepami, przystankami i parkiem](docs/img/szczegoly.jpg)
 
 **Dojazdy.** Najszybszy wariant do każdego miejsca: czas, odcinki pieszo i kolejne linie, godziny odjazdu i przyjazdu. Link „+2 warianty” pokazuje pozostałe. Najechanie kursorem rysuje trasę na mapie, a kliknięcie przypina ją i rozpisuje przesiadki z przystankami, kierunkiem i liczbą przystanków.
 
@@ -201,17 +203,33 @@ Wszystkie filtry (cena, metraż, pokoje, odległość od miasta) ustawiasz na OL
 
 Wyszukiwania bez ostrych filtrów dają tysiące ofert, a każda unikalna lokalizacja zużywa parę z darmowego limitu Google ([zobacz niżej](#koszty-i-limity-google)), więc filtry na OLX warto ustawić ciasno.
 
+### Mieszkania i domy
+
+Gdy w `[wyszukiwania]` są adresy mieszkań i domów, nad listą (obok wyboru sortowania) pojawiają się dwa przyciski z ikonami budynku i domu oraz liczbą ofert. Każdy włącza lub wyłącza swój rodzaj, więc można oglądać tylko domy albo tylko mieszkania, a wybór jest zapamiętany. Zawsze zostaje włączony przynajmniej jeden. Przy ofercie widać małą ikonę jej rodzaju, a filtry „Wszystkie”, „Zaznaczone”, „Nowe” i znaczniki na mapie uwzględniają ten wybór.
+
+Podpowiedzi o obsłudze są pod „Podsumowanie i podpowiedzi” w nagłówku listy.
+
+### Motyw dzienny i nocny
+
+Przycisk ze słońcem lub księżycem obok tytułu przełącza motyw. Domyślnie strona podąża za ustawieniem systemu, a Twój wybór jest zapamiętany. W motywie nocnym ciemne są panel boczny i dymki na mapie. Sama mapa, znaczki i przyciski mapy zostają takie jak w dziennym, żeby nie tracić nazw ulic i szczegółów.
+
+### Wykluczanie obszarów
+
+Przycisk „Wyklucz obszar” w rzędzie filtrów (obok „Wszystkie”, „Zaznaczone” i „Nowe”) włączasz lasso: przytrzymaj przycisk myszy, zakreśl na mapie obszar, który Cię nie interesuje (np. okolice lotniska), i puść. Obszar zaznacza się lekką czerwienią, a oferty z jego wnętrza znikają z listy i mapy. Kliknięcie obszaru pozwala go usunąć, „Cofnij ostatni” i „Usuń wszystkie” też działają. Esc kończy rysowanie.
+
+Obszary zapisują się od razu w `wykluczenia.json`. `dojazdy.py` czyta ten plik, więc przy kolejnym uruchomieniu nie liczy dla takich ofert czasów ani tras i nie zapisuje ich zdjęć ani parametrów. Otodom nie podaje współrzędnych w wynikach wyszukiwania, więc karta nowej oferty jest otwierana jeszcze raz, żeby sprawdzić, czy leży w obszarze: to jedyny koszt, a Google nie jest pytany wcale. Obszary można rysować przed pierwszym uruchomieniem `dojazdy.py`.
+
 ### Sortowanie i kilka ofert w jednym miejscu
 
-**Sortowanie.** Lista „Sortuj według” nad ofertami układa je według czasu w drodze (domyślnie), ceny, ceny z czynszem, ceny za m² albo daty dodania, od najnowszych. Numery ofert zostają z rankingu dojazdów, więc przy każdym sortowaniu znaczą to samo na liście i na mapie. Oferty bez danego parametru trafiają na koniec, a przy równych wartościach wyżej jest oferta z krótszym dojazdem. Cenę i inne kryteria wyszukiwania zawężasz w `otodom_url`, a strona tylko zmienia kolejność.
+**Sortowanie.** Lista „Sortuj według” nad ofertami układa je według czasu w drodze (domyślnie), ceny, ceny za m² albo daty dodania, od najnowszych. Numery ofert zostają z rankingu dojazdów, więc przy każdym sortowaniu znaczą to samo na liście i na mapie. Oferty bez danego parametru trafiają na koniec, a przy równych wartościach wyżej jest oferta z krótszym dojazdem. Cenę i inne kryteria wyszukiwania zawężasz w `wyszukiwania`, a strona tylko zmienia kolejność.
 
-**Wspólny znacznik.** Oferty oddalone od siebie o najwyżej 25 m, np. kilka lokali w jednym budynku albo w jednej inwestycji, dzielą na mapie jeden znacznik. Numery są na nim ułożone jak talia kart: do trzech numerów, a przy większej liczbie dwa pierwsze i „+N”. Kolejność numerów na znaczniku jest taka sama jak na liście, a rozwinięta oferta jest na nim zawsze widoczna. Kliknięcie znacznika otwiera listę ofert z tego miejsca z czasem w drodze, ceną, metrażem i liczbą pokoi, a wybór pozycji rozwija ofertę na liście. Karta oferty ma oznaczenie „W tym samym miejscu” z numerami pozostałych.
+**Wspólny znacznik.** Oferty oddalone od siebie o najwyżej 25 m, np. kilka lokali w jednym budynku albo w jednej inwestycji, dzielą na mapie jeden znacznik. Numery są na nim ułożone jak talia kart: do trzech numerów, a przy większej liczbie dwa pierwsze i „+N”. Kolejność numerów na znaczniku jest taka sama jak na liście, a rozwinięta oferta jest na nim zawsze widoczna. Kliknięcie znacznika otwiera listę ofert z tego miejsca z czasem w drodze, ceną, metrażem i liczbą pokoi, a wybór pozycji rozwija ofertę na liście, nie zamykając listy. Lista zostaje na tym samym przewinięciu i zamyka ją krzyżyk albo wybór oferty spoza tego miejsca. Karta oferty ma oznaczenie „W tym samym miejscu” z numerami pozostałych.
 
 ![Lista posortowana według ceny, a na mapie wspólny znacznik pięciu ofert z jednego budynku na Mokotowie z otwartą listą tych ofert](docs/img/wspolne-miejsce.jpg)
 
 ### Pozostałe funkcje
 
-- Kliknięcie numeru oferty ją zaznacza. Filtry u góry pokazują wszystkie oferty, zaznaczone albo nowe.
+- Kliknięcie gwiazdki przy ofercie ją zaznacza. Filtry u góry pokazują wszystkie oferty, zaznaczone albo nowe.
 - Szerokość listy zmienisz, przeciągając jej krawędź (albo strzałkami na klawiaturze). Podwójne kliknięcie przywraca domyślną.
 - Zaznaczenia, sortowanie i szerokość listy zapamiętuje przeglądarka (`localStorage`), więc zostają po ponownym wygenerowaniu strony.
 - Przełącznik warstw w prawym górnym rogu mapy zmienia podkład na zdjęcia satelitarne.
@@ -330,6 +348,7 @@ Wszystkie są w `.gitignore`, bo zawierają dane pobrane z sieci albo Twoje wyni
 | `wyniki.md`, `wyniki.csv`, `wyniki.json` | Ranking: do czytania, do Excela, dla strony | `dojazdy.py` |
 | `mazowieckie-latest.osm.pbf` | Wycinek OpenStreetMap, kilkaset MB, odświeżany co 30 dni | `okolica.py` |
 | `okolica.json` | Sklepy, przystanki, stacje i parki z regionu | `okolica.py` |
+| `wykluczenia.json` | Obszary wykluczone na mapie (wieloboki ze współrzędnych) | `mapa.py` |
 | `mapa.html` | Strona z listą i mapą | `mapa.py` |
 
 Nie usuwaj `czasy.json` ani `trasy.json`. Oprócz zapamiętanych wyników trzymają liczniki zapytań, dzięki którym skrypt nie przekracza darmowego limitu Google. Usunięcie `stan.json` jest bezpieczne, ale skrypt otworzy wtedy od nowa karty wszystkich ofert.
@@ -392,7 +411,8 @@ Trzeba pamiętać, że oferty z przerwanego wyszukiwania, których nie pobrano, 
 | `Błąd Google Routes API (HTTP 403)` | Routes API nie jest włączone albo brak konta rozliczeniowego | Sprawdź projekt w Google Cloud Console |
 | `Wykorzystano limit …` | Skrypt doszedł do swojego miesięcznego limitu | Brakujące czasy i trasy policzy w kolejnym miesiącu |
 | `Google odrzuca zapytania (HTTP 429)` | Limit na minutę albo limit ustawiony w konsoli | Brakujące dane pobierze przy kolejnym uruchomieniu |
-| `Brak pliku wyniki.json` | `mapa.py` uruchomione przed `dojazdy.py` | Uruchom najpierw `python dojazdy.py` |
+| `Nie udało się uruchomić serwera na porcie 8765` | Port zajęty (np. drugi `mapa.py`) | Zamknij drugi program; do tego czasu strona otwiera się z dysku, bez rysowania obszarów |
+| `Nie umiem odczytać wykluczenia.json` | Uszkodzony plik z obszarami | Usuń plik i narysuj obszary od nowa |
 | `Brak okolica.json` | Nie uruchomiono `okolica.py` | Uruchom `python okolica.py`, potem `python mapa.py` |
 | Na stronie: „Tras jeszcze nie pobrano” | Trasy nie zmieściły się w limicie albo był błąd | Uruchom ponownie `python dojazdy.py` |
 
