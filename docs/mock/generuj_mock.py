@@ -50,6 +50,13 @@ OFFERS = [
     ("2 pokoje w kamienicy obok, Powiśle", 52.2365, 21.0272, 4400, 580, 47, 2, 1912, "2", True, False),
 ]
 
+# domy, w tym samym kształcie co OFFERS (piętro puste); w interfejsie pojawia się wtedy filtr mieszkania/domy
+HOUSES = [
+    ("Dom szeregowy z ogrodem, Wawer", 52.2036, 21.1722, 7900, 0, 128, 5, 2008, "", False, True),
+    ("Dom wolnostojący, Ursynów", 52.1342, 21.0397, 9800, 0, 165, 5, 1999, "", False, False),
+    ("Bliźniak z garażem, Bemowo", 52.2551, 20.9158, 6900, 0, 112, 4, 2015, "", True, False),
+]
+PORTALS = ["Otodom", "Otodom", "Nieruchomości Online", "OLX", "Otodom"]  # portale ofert w danych przykładowych
 ADVERTISERS = ["osoba prywatna", "Biuro Nieruchomości Przykładowe", "Agencja Mieszkań Testowych",
                "osoba prywatna", "Lokale Wzorcowe sp. z o.o."]
 WALL_COLORS = [("#e9e2d6", "#b9a68a"), ("#dfe6ea", "#9aa9b3"), ("#efe7dc", "#a88f6e"),
@@ -169,7 +176,7 @@ def room_photo(seed, variant):
 
 def offers():
     result = []
-    for i, (title, lat, lng, price, rent, area, rooms, year, floor, approx, new) in enumerate(OFFERS):
+    for i, (title, lat, lng, price, rent, area, rooms, year, floor, approx, new) in enumerate([*OFFERS, *HOUSES]):
         times = [max(9, round(distance_km((lat, lng), (p["lat"], p["lng"])) * 3.1 + random.randint(6, 12)))
                  for p in PLACES]
         photos = [room_photo(i, v) for v in range(4)]
@@ -199,6 +206,8 @@ def offers():
                 "equipment": random.sample(["lodówka", "pralka", "zmywarka", "kuchenka", "meble", "telewizor"], 4),
                 "photos": photos,
             },
+            "type": "house" if i >= len(OFFERS) else "flat", "portal": PORTALS[i % len(PORTALS)],
+            "alsoOn": [{"portal": "OLX", "link": "https://example.com/olx/66000000"}] if i == 0 else [],
             "isNew": new, "approximate": approx, "title": title,
             "link": f"https://example.com/oferta/{66000000 + i * 137}", "lat": lat, "lng": lng,
         })
