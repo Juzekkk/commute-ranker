@@ -254,7 +254,8 @@ def main():
     (HERE / "okolica.json").write_text(json.dumps(nearby(all_offers), ensure_ascii=False), encoding="utf-8")
     mapa.DATA_FILE, mapa.NEARBY_FILE, mapa.MAP_FILE = HERE / "wyniki.json", HERE / "okolica.json", HERE / "mapa.html"
     mapa.webbrowser.open = lambda *_: None
-    mapa.main()
+    mapa.ZONES_FILE = HERE / "wykluczenia.json"
+    mapa.main(serve_page=False)
 
 
 if __name__ == "__main__":

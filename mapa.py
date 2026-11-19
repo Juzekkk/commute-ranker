@@ -5,18 +5,32 @@ czyli listę ofert obok mapy z Twoimi miejscami. Niczego nie pobiera.
 Jeśli jest okolica.json (z okolica.py), wkleja też sklepy, przystanki i parki
 z okolicy ofert, a strona sama liczy, co jest najbliżej wybranej oferty.
 
-Uruchomienie: python mapa.py (otworzy stronę w przeglądarce)
+Na mapie można zakreślić obszary, z których nie chcesz ofert (np. okolice lotniska).
+Zapisują się w wykluczenia.json, a dojazdy.py pomija oferty z tych obszarów. Działa to
+też przed pierwszym uruchomieniem dojazdy.py: wtedy strona pokazuje tylko miejsca z config.toml.
+
+Uruchomienie:
+  python mapa.py          lokalny serwer na http://127.0.0.1:8765 (Ctrl+C kończy); obszary zapisują się same
+  python mapa.py --plik   tylko zapisuje mapa.html i otwiera go z dysku (obszary można oglądać, nie rysować)
 """
 
 import json
+import math
 import sys
+import tomllib
 import webbrowser
+from datetime import datetime
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlsplit
 
 HERE = Path(__file__).resolve().parent
 DATA_FILE = HERE / "wyniki.json"
 NEARBY_FILE = HERE / "okolica.json"
 MAP_FILE = HERE / "mapa.html"
+ZONES_FILE = HERE / "wykluczenia.json"
+CONFIG_FILE = HERE / "config.toml"
+PORT = 8765  # stały, bo przeglądarka pamięta zaznaczone oferty i ustawienia osobno dla każdego adresu
 
 TEMPLATE = r"""<!doctype html>
 <html lang="pl">
@@ -108,6 +122,15 @@ TEMPLATE = r"""<!doctype html>
   }
   .filters button[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--surface); }
   .filters .count { margin-left: 5px; opacity: .75; }
+  .filters button.zone-btn[aria-pressed="true"] { background: #c62828; border-color: #c62828; color: #fff; }
+  .filters button.zone-btn:disabled { opacity: .55; cursor: not-allowed; }
+  .zones { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .zones[hidden] { display: none; }
+  .zones button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .zones-hint { flex-basis: 100%; margin: 0; }
+  .zones-hint[hidden] { display: none; }
+  .leaflet-container.drawing, .leaflet-container.drawing .leaflet-interactive { cursor: crosshair; touch-action: none; }
+  .zone-popup { display: grid; gap: 6px; justify-items: start; }
   .hint { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
   .sort { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--muted); }
   .sort select {
@@ -526,6 +549,13 @@ TEMPLATE = r"""<!doctype html>
       <button type="button" data-filter="all" aria-pressed="true">Wszystkie<span class="count" id="count-all"></span></button>
       <button type="button" data-filter="selected" aria-pressed="false">Zaznaczone<span class="count" id="count-selected"></span></button>
       <button type="button" data-filter="new" aria-pressed="false">Nowe<span class="count" id="count-new"></span></button>
+      <button type="button" class="zone-btn" id="zone-draw" aria-pressed="false">Wyklucz obszar</button>
+    </div>
+    <div class="zones" id="zones" hidden>
+      <span id="zone-status"></span>
+      <button type="button" class="more" id="zone-undo" hidden>Cofnij ostatni</button>
+      <button type="button" class="more" id="zone-clear" hidden>Usuń wszystkie</button>
+      <p class="zones-hint" id="zone-hint" hidden>Przytrzymaj przycisk myszy i zakreśl obszar na mapie, puść, żeby go zamknąć. Esc kończy zaznaczanie.</p>
     </div>
     <div class="sort">
       <label for="sort">Sortuj według</label>
@@ -561,6 +591,7 @@ const EMPTY = {
   all: "Brak ofert spełniających kryteria. Zmień wyszukiwanie lub filtry w config.toml i uruchom dojazdy.py ponownie.",
   selected: "Nie zaznaczono jeszcze żadnej oferty. Zaznacz oferty w widoku Wszystkie, a pojawią się tutaj.",
   new: "Od poprzedniego uruchomienia nie pojawiły się nowe oferty.",
+  none: "Nie ma jeszcze ofert. Zaznacz na mapie obszary, które Cię nie interesują, a potem uruchom dojazdy.py: pominie oferty z tych obszarów.",
 };
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const numbers = new Intl.NumberFormat("pl-PL");
@@ -1444,16 +1475,17 @@ function sorted(offers) {
 }
 
 function visibleOffers() {
-  let offers = data.offers;
+  let offers = liveOffers();
   if (filter === "selected") offers = offers.filter(offer => selected.has(offer.id));
   if (filter === "new") offers = offers.filter(offer => offer.isNew);
   return sorted(offers);
 }
 
 function updateCounts() {
-  document.getElementById("count-all").textContent = data.offers.length;
-  document.getElementById("count-selected").textContent = data.offers.filter(offer => selected.has(offer.id)).length;
-  document.getElementById("count-new").textContent = data.offers.filter(offer => offer.isNew).length;
+  const offers = liveOffers();
+  document.getElementById("count-all").textContent = offers.length;
+  document.getElementById("count-selected").textContent = offers.filter(offer => selected.has(offer.id)).length;
+  document.getElementById("count-new").textContent = offers.filter(offer => offer.isNew).length;
 }
 
 function fitTo(offers) {
@@ -1471,7 +1503,7 @@ function render({ fit = false } = {}) {
   document.getElementById("list").replaceChildren(...offers.map(card));
   const empty = document.getElementById("empty");
   empty.hidden = offers.length > 0;
-  empty.textContent = EMPTY[filter];
+  empty.textContent = data.offers.length ? EMPTY[filter] : EMPTY.none;
   updateCounts();
   if (fit) fitTo(offers);
 }
@@ -1483,6 +1515,129 @@ for (const button of document.querySelectorAll("[data-filter]")) {
     render({ fit: true });
   });
 }
+
+// Obszary wykluczone: lasso na mapie. Zapisuje je mapa.py (serwer lokalny) w wykluczenia.json,
+// a dojazdy.py pomija oferty z tych obszarów (bez zdjęć, szczegółów, czasów i tras).
+const CAN_SAVE = location.protocol === "http:" || location.protocol === "https:";
+const ZONE_STYLE = { color: "#c62828", weight: 1.5, dashArray: "5 4", fillColor: "#e53935", fillOpacity: 0.16 };
+const zoneLayer = L.layerGroup().addTo(map);
+const zoneDraw = document.getElementById("zone-draw");
+const zoneStatus = document.getElementById("zone-status");
+const zonesBox = document.getElementById("zones");
+const zoneUndo = document.getElementById("zone-undo");
+const zoneClear = document.getElementById("zone-clear");
+const zoneHint = document.getElementById("zone-hint");
+const mapBox = map.getContainer();
+let zones = (data.zones || []).map(ring => ring.map(([lat, lng]) => [lat, lng]));
+let excluded = new Set();  // oferty leżące w wykluczonych obszarach: znikają z listy i mapy
+let saveFailed = false;
+let drawMode = false;
+let trace = null;  // pętla rysowana właśnie: { points: [LatLng], last: Point, shape: L.Polygon }
+
+function ringContains(ring, lat, lng) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [lat1, lng1] = ring[j], [lat2, lng2] = ring[i];
+    if ((lat1 > lat) !== (lat2 > lat) && lng < (lng2 - lng1) * (lat - lat1) / (lat2 - lat1) + lng1) inside = !inside;
+  }
+  return inside;
+}
+function liveOffers() {
+  return data.offers.filter(offer => !excluded.has(offer.id));
+}
+function zonePopup(index) {
+  const box = el("div", "zone-popup");
+  const remove = el("button", "more", "Usuń ten obszar");
+  remove.type = "button";
+  remove.addEventListener("click", () => { zones.splice(index, 1); map.closePopup(); zonesChanged(); });
+  box.append(el("span", null, "Obszar wykluczony: oferty stąd są pomijane."), remove);
+  return box;
+}
+function updateZoneUi() {
+  const n = zones.length;
+  let text = n ? `${n} ${plural(n, "obszar wykluczony", "obszary wykluczone", "obszarów wykluczonych")}` : "";
+  if (excluded.size) text += `, ukryte oferty: ${excluded.size}`;
+  if (!CAN_SAVE) text += ". Tylko podgląd: do zmian uruchom python mapa.py";
+  else if (saveFailed) text += ". Nie udało się zapisać wykluczenia.json, czy mapa.py nadal działa?";
+  zoneStatus.textContent = text;
+  zoneUndo.hidden = zoneClear.hidden = !n || !CAN_SAVE;
+  zonesBox.hidden = !n && !drawMode;  // pasek pod filtrami tylko wtedy, gdy jest co pokazać
+}
+function renderZones() {
+  zoneLayer.clearLayers();
+  zones.forEach((ring, index) => L.polygon(ring, ZONE_STYLE).bindPopup(() => zonePopup(index)).addTo(zoneLayer));
+  excluded = new Set(data.offers.filter(offer => zones.some(ring => ringContains(ring, offer.lat, offer.lng)))
+    .map(offer => offer.id));
+  updateZoneUi();
+}
+async function saveZones() {
+  if (!CAN_SAVE) return;
+  try {
+    const response = await fetch("/wykluczenia", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ obszary: zones }),
+    });
+    saveFailed = !response.ok;
+  } catch { saveFailed = true; }
+  updateZoneUi();
+}
+function zonesChanged() {
+  renderZones();
+  render();
+  saveZones();
+}
+
+function cancelTrace() {
+  if (trace) trace.shape.remove();
+  trace = null;
+}
+function setDrawMode(on) {
+  drawMode = on && CAN_SAVE;
+  zoneDraw.setAttribute("aria-pressed", String(drawMode));
+  zoneHint.hidden = !drawMode;
+  updateZoneUi();
+  mapBox.classList.toggle("drawing", drawMode);
+  for (const handler of [map.dragging, map.doubleClickZoom, map.boxZoom]) drawMode ? handler.disable() : handler.enable();
+  if (drawMode) map.closePopup(); else cancelTrace();
+}
+zoneDraw.disabled = !CAN_SAVE;
+zoneDraw.title = CAN_SAVE ? "Zakreśl na mapie obszar, z którego nie chcesz ofert (np. okolice lotniska)"
+  : "Otwórz stronę poleceniem python mapa.py: tylko wtedy da się zapisać obszary do pliku";
+zoneDraw.addEventListener("click", () => setDrawMode(!drawMode));
+zoneUndo.addEventListener("click", () => { zones.pop(); zonesChanged(); });
+zoneClear.addEventListener("click", () => {
+  if (confirm("Usunąć wszystkie wykluczone obszary?")) { zones = []; zonesChanged(); }
+});
+document.addEventListener("keydown", event => { if (event.key === "Escape" && drawMode) setDrawMode(false); });
+// przechwytujemy zdarzenia, zanim zobaczy je Leaflet (przesuwanie mapy, kliknięcia znaczników i obszarów)
+const ownEvent = event => drawMode && !event.target.closest(".leaflet-control");
+mapBox.addEventListener("pointerdown", event => {
+  if (!ownEvent(event) || event.button !== 0) return;
+  event.preventDefault();
+  event.stopPropagation();
+  mapBox.setPointerCapture(event.pointerId);
+  const start = map.mouseEventToLatLng(event);
+  trace = { points: [start], last: map.mouseEventToContainerPoint(event),
+            shape: L.polygon([start], { ...ZONE_STYLE, interactive: false }).addTo(map) };
+}, true);
+mapBox.addEventListener("pointermove", event => {
+  if (!trace) return;
+  const point = map.mouseEventToContainerPoint(event);
+  if (point.distanceTo(trace.last) < 4) return;  // rzadsze punkty: krótszy plik, gładsza pętla
+  trace.last = point;
+  trace.points.push(map.mouseEventToLatLng(event));
+  trace.shape.setLatLngs(trace.points);
+});
+mapBox.addEventListener("pointerup", () => {
+  if (!trace) return;
+  const { points } = trace;
+  cancelTrace();
+  if (points.length < 3) return;  // samo kliknięcie, nie pętla
+  zones.push(points.map(({ lat, lng }) => [Number(lat.toFixed(5)), Number(lng.toFixed(5))]));
+  zonesChanged();
+});
+mapBox.addEventListener("pointercancel", cancelTrace);
+mapBox.addEventListener("click", event => { if (ownEvent(event)) event.stopPropagation(); }, true);
+renderZones();
 
 const PANEL_KEY = "mieszkania-wedlug-dojazdu:szerokosc-listy";
 const PANEL_DEFAULT = 400, PANEL_MIN = 320;
@@ -1565,15 +1720,126 @@ def as_script_json(value):
     return json.dumps(value, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
 
 
-def main():
-    if not DATA_FILE.exists():
-        sys.exit("Brak pliku wyniki.json. Najpierw uruchom dojazdy.py.")
-    data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+def load_zones():
+    """Obszary z wykluczenia.json jako lista wieloboków [[lat, lng], ...]; brak lub błąd pliku: pusta lista."""
+    try:
+        return valid_zones(json.loads(ZONES_FILE.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return []
+
+
+def valid_zones(payload):
+    """Sprawdza {"obszary": [[[lat, lng], ...], ...]} i zwraca listę obszarów albo zgłasza ValueError."""
+    zones = payload["obszary"] if isinstance(payload, dict) else None
+    if not isinstance(zones, list) or len(zones) > 200:
+        raise ValueError("obszary")
+    for ring in zones:
+        if not isinstance(ring, list) or not 3 <= len(ring) <= 5000:
+            raise ValueError("obszar")
+        for point in ring:
+            if (not isinstance(point, list) or len(point) != 2
+                    or not all(isinstance(x, (int, float)) and math.isfinite(x) for x in point)
+                    or not -90 <= point[0] <= 90 or not -180 <= point[1] <= 180):
+                raise ValueError("punkt")
+    return zones
+
+
+def save_zones(zones):
+    tmp = ZONES_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"obszary": zones}, separators=(",", ":")), encoding="utf-8")
+    tmp.replace(ZONES_FILE)  # plik nigdy nie jest zapisany w połowie
+
+
+def places_from_config():
+    """Miejsca z config.toml: do pokazania na mapie, zanim są jakiekolwiek wyniki."""
+    try:
+        config = tomllib.loads(CONFIG_FILE.read_text(encoding="utf-8-sig"))
+        return [{"name": place["nazwa"], **dict(zip(("lat", "lng"), (float(x) for x in place["wspolrzedne"].split(","))))}
+                for place in config.get("miejsca", [])]
+    except (OSError, ValueError, KeyError, tomllib.TOMLDecodeError):
+        return []
+
+
+def build_page():
+    if DATA_FILE.exists():
+        data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+    else:
+        data = {"generated": datetime.now().strftime("%Y-%m-%d %H:%M"), "places": places_from_config(), "offers": [],
+                "summary": ["Brak wyników: uruchom dojazdy.py. Obszary do pominięcia możesz zaznaczyć już teraz."]}
+    data["zones"] = load_zones()
     nearby = nearby_for(data["offers"])
-    if nearby is None:
+    if nearby is None and data["offers"]:
         print("Brak okolica.json: uruchom python okolica.py, żeby strona pokazywała sklepy, przystanki i parki.")
-    page = TEMPLATE.replace("__DATA__", as_script_json(data)).replace("__NEARBY__", as_script_json(nearby))
-    MAP_FILE.write_text(page, encoding="utf-8")
+    return TEMPLATE.replace("__DATA__", as_script_json(data)).replace("__NEARBY__", as_script_json(nearby))
+
+
+def serve(port=PORT):
+    """Lokalny serwer: oddaje stronę i przyjmuje obszary do zapisania. Tylko z tego komputera."""
+    hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+
+    class Handler(BaseHTTPRequestHandler):
+        def reply(self, status, body=b"", content_type="text/plain; charset=utf-8"):
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def trusted(self):  # inne strony w przeglądarce nie mogą zapisywać do tego pliku
+            host, origin = self.headers.get("Host", ""), self.headers.get("Origin")
+            return host in hosts and origin in (None, f"http://{host}")
+
+        def do_GET(self):
+            path = urlsplit(self.path).path
+            if not self.trusted():
+                self.reply(403)
+            elif path in ("/", "/mapa.html"):
+                self.reply(200, build_page().encode("utf-8"), "text/html; charset=utf-8")
+            elif path == "/wykluczenia":
+                self.reply(200, json.dumps({"obszary": load_zones()}).encode(), "application/json")
+            else:
+                self.reply(404)
+
+        def do_PUT(self):
+            if not self.trusted() or urlsplit(self.path).path != "/wykluczenia":
+                return self.reply(403)
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 5_000_000:
+                    raise ValueError("rozmiar")
+                save_zones(valid_zones(json.loads(self.rfile.read(length))))
+            except ValueError:
+                return self.reply(400)
+            except OSError:
+                return self.reply(500)
+            self.reply(204)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    url = f"http://127.0.0.1:{port}/"
+    print(f"Strona działa pod adresem {url}. Obszary wykluczone zapisują się w {ZONES_FILE.name}. Ctrl+C kończy.")
+    webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nKoniec.")
+    finally:
+        server.server_close()
+
+
+def main(serve_page=None):
+    if serve_page is None:
+        serve_page = "--plik" not in sys.argv[1:]
+    MAP_FILE.write_text(build_page(), encoding="utf-8")
+    if serve_page:
+        try:
+            return serve()
+        except OSError as error:
+            print(f"Nie udało się uruchomić serwera na porcie {PORT} ({error}). "
+                  "Otwieram stronę z dysku: obszarów nie da się wtedy rysować.")
     print(f"Zapisano {MAP_FILE.name}, otwieram w przeglądarce.")
     webbrowser.open(MAP_FILE.as_uri())
 
