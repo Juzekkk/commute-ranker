@@ -24,6 +24,14 @@ TEMPLATE = r"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mieszkania według dojazdu</title>
+<script>  // motyw przed pierwszym rysowaniem strony: zapamiętany wybór albo ustawienie systemu
+  (() => {
+    let theme = null;
+    try { theme = localStorage.getItem("mieszkania-wedlug-dojazdu:motyw"); } catch { /* odczyt niedostępny */ }
+    if (theme !== "dark" && theme !== "light") theme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.dataset.theme = theme;
+  })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&display=swap">
@@ -47,21 +55,19 @@ TEMPLATE = r"""<!doctype html>
     --new: #c8102e;
     color-scheme: light;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #12161b;
-      --surface: #181d24;
-      --text: #e6eaef;
-      --muted: #9aa5b1;
-      --rule: #29313b;
-      --on-signal: #12161b;
-      --active-bg: #1f2a36;
-      --link: #7cc0f5;
-      --focus: #7cc0f5;
-      --new: #ff7a7a;
-      --variant-bg: #26394d;
-      color-scheme: dark;
-    }
+  :root[data-theme="dark"] {
+    --bg: #12161b;
+    --surface: #181d24;
+    --text: #e6eaef;
+    --muted: #9aa5b1;
+    --rule: #29313b;
+    --on-signal: #12161b;
+    --active-bg: #1f2a36;
+    --link: #7cc0f5;
+    --focus: #7cc0f5;
+    --new: #ff7a7a;
+    --variant-bg: #26394d;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
@@ -224,6 +230,26 @@ TEMPLATE = r"""<!doctype html>
   .actions a { color: var(--link); }
 
   .leaflet-container { font: 14px/1.4 "Barlow", "Segoe UI", system-ui, sans-serif; }
+  /* w motywie nocnym ciemne są panel i dymki; mapa, znaczki i kontrolki zostają takie jak w dziennym */
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface); color: var(--text); }
+  .leaflet-container a.leaflet-popup-close-button { color: var(--muted); }
+  .leaflet-container a.leaflet-popup-close-button:hover { color: var(--text); }
+  .theme-toggle {
+    all: unset;
+    box-sizing: border-box;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .theme-toggle:hover { background: var(--variant-bg); color: var(--text); }
+  .theme-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .theme-toggle svg { width: 19px; height: 19px; }
+  .title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
   .marker {
     position: relative;
     display: grid;
@@ -272,7 +298,7 @@ TEMPLATE = r"""<!doctype html>
   .marker.more { background: #dce1e6; color: #1b2430; }
   .group-popup { display: grid; gap: 6px; }
   .group-title { font-weight: 600; }
-  .group-note { font-size: 12.5px; color: #5d6876; }
+  .group-note { font-size: 12.5px; color: var(--muted); }
   .group-list { display: grid; gap: 2px; max-height: 280px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
   .group-item {
     all: unset;
@@ -286,14 +312,14 @@ TEMPLATE = r"""<!doctype html>
     border-radius: 4px;
     cursor: pointer;
   }
-  .group-item:hover { background: #eaf2f9; }
-  .group-item:focus-visible { outline: 2px solid #0067b1; outline-offset: 1px; }
-  .group-item[aria-current="true"] { background: #eaf2f9; box-shadow: inset 3px 0 0 #0067b1; }
+  .group-item:hover { background: var(--active-bg); }
+  .group-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .group-item[aria-current="true"] { background: var(--active-bg); box-shadow: inset 3px 0 0 var(--focus); }
   .group-item .marker { box-shadow: none; }
   .group-item .marker.active { transform: none; }
   .group-main { display: grid; min-width: 0; font-size: 13px; line-height: 1.35; }
   .group-main strong { font-size: 14px; }
-  .group-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #5d6876; }
+  .group-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
   .station {
     display: block;
     width: 18px;
@@ -315,7 +341,7 @@ TEMPLATE = r"""<!doctype html>
     box-shadow: 0 1px 3px rgb(0 0 0 / .3);
   }
   .popup { display: grid; gap: 4px; }
-  .popup-title { font-weight: 600; color: #0067b1; }
+  .popup-title { font-weight: 600; color: var(--link); }
   .popup .lines { margin: 2px 0; }
   .poi {
     display: grid;
@@ -491,7 +517,10 @@ TEMPLATE = r"""<!doctype html>
 <body>
 <aside class="panel">
   <header>
-    <h1>Mieszkania według dojazdu</h1>
+    <div class="title-row">
+      <h1>Mieszkania według dojazdu</h1>
+      <button type="button" class="theme-toggle" id="theme-toggle"></button>
+    </div>
     <p class="stamp" id="stamp"></p>
     <div class="filters" role="group" aria-label="Pokaż oferty">
       <button type="button" data-filter="all" aria-pressed="true">Wszystkie<span class="count" id="count-all"></span></button>
@@ -655,6 +684,27 @@ const imagery = L.tileLayer(
 L.control.layers({ "Mapa": streets, "Zdjęcia satelitarne": imagery }).addTo(map);
 L.control.scale({ imperial: false }).addTo(map);
 const walkCircle = L.circle([0, 0], { radius: 500, color: "#0067b1", weight: 1.5, dashArray: "5 5", fillOpacity: 0.07, interactive: false });
+
+const THEME_KEY = "mieszkania-wedlug-dojazdu:motyw";
+const themeToggle = document.getElementById("theme-toggle");
+const isDark = () => document.documentElement.dataset.theme === "dark";
+function applyTheme(theme, { save = false } = {}) {
+  document.documentElement.dataset.theme = theme;
+  const dark = theme === "dark";
+  themeToggle.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${dark ? ICONS.sun : ICONS.moon}</svg>`;
+  themeToggle.title = themeToggle.ariaLabel = dark ? "Przełącz na motyw dzienny" : "Przełącz na motyw nocny";
+  if (save) {
+    try { localStorage.setItem(THEME_KEY, theme); } catch { /* zapis niedostępny */ }
+  }
+}
+themeToggle.addEventListener("click", () => applyTheme(isDark() ? "light" : "dark", { save: true }));
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", event => {
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch { /* odczyt niedostępny */ }
+  if (!saved) applyTheme(event.matches ? "dark" : "light");  // bez własnego wyboru podążamy za systemem
+});
+applyTheme(document.documentElement.dataset.theme);
 
 for (const place of data.places) {
   const icon = L.divIcon({ className: "", html: `<span class="station" style="--line:${place.color}"></span>`,
