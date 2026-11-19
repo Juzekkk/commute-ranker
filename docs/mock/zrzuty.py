@@ -33,18 +33,21 @@ def main():
         settle(page)
         page.screenshot(path=OUT / "szczegoly.jpg", quality=85)
 
+        # Dojazdy i Okolica są domyślnie zwinięte: rozwijamy je (ustawienie zostaje dla kolejnych ofert)
+        for name in ("Dojazdy", "Okolica"):
+            page.locator(".offer.active .section-head", has_text=name).click()
         variant = page.locator(".offer.active .variant").first
         variant.scroll_into_view_if_needed()
         variant.click()
         settle(page)
-        page.locator(".offer.active .section-title", has_text="Dojazdy").evaluate(
+        page.locator(".offer.active .section-head", has_text="Dojazdy").evaluate(
             "el => el.scrollIntoView({block: 'start'})")
         page.mouse.move(1000, 450)
         settle(page, 800)
         page.screenshot(path=OUT / "dojazdy.jpg", quality=85)
 
         variant.click()  # odpina trasę, mapa wraca do okolicy oferty
-        page.locator(".offer.active .section-title", has_text="Okolica").evaluate(
+        page.locator(".offer.active .section-head", has_text="Okolica").evaluate(
             "el => el.scrollIntoView({block: 'start'})")
         settle(page)
         page.screenshot(path=OUT / "okolica.jpg", quality=85)

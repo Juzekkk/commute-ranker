@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Fikcyjne dane do zrzutów ekranu w README: wyniki.json i okolica.json w tym folderze
-oraz mapa.html złożona przez mapa.py. Oferty, ogłoszeniodawcy, zdjęcia i rzuty są
+oraz mapa.html złożona przez mapa.py. Oferty, ogłoszeniodawcy i zdjęcia są
 wymyślone; współrzędne miejsc są w Warszawie, a trasy to uproszczone linie.
 
 Uruchomienie: python docs/mock/generuj_mock.py
@@ -167,25 +167,6 @@ def room_photo(seed, variant):
 </svg>""")
 
 
-def floor_plan(rooms):
-    walls = '<rect x="20" y="20" width="560" height="360" fill="#ffffff" stroke="#1b2430" stroke-width="8"/>'
-    if rooms >= 2:
-        walls += '<line x1="300" y1="20" x2="300" y2="240" stroke="#1b2430" stroke-width="6"/>'
-    if rooms >= 3:
-        walls += '<line x1="300" y1="140" x2="580" y2="140" stroke="#1b2430" stroke-width="6"/>'
-    walls += ('<line x1="20" y1="240" x2="420" y2="240" stroke="#1b2430" stroke-width="6"/>'
-              '<line x1="420" y1="240" x2="420" y2="380" stroke="#1b2430" stroke-width="6"/>')
-    labels = [("Pokój", 160, 130), ("Kuchnia", 220, 315), ("Łazienka", 500, 315)]
-    if rooms >= 2:
-        labels.append(("Sypialnia", 440, 80 if rooms >= 3 else 130))
-    if rooms >= 3:
-        labels.append(("Pokój", 440, 195))
-    text = "".join(f'<text x="{x}" y="{y}" font-family="sans-serif" font-size="20" fill="#5d6876" '
-                   f'text-anchor="middle">{t}</text>' for t, x, y in labels)
-    return svg_uri(f'<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">'
-                   f'<rect width="600" height="400" fill="#f3f5f7"/>{walls}{text}</svg>')
-
-
 def offers():
     result = []
     for i, (title, lat, lng, price, rent, area, rooms, year, floor, approx, new) in enumerate(OFFERS):
@@ -216,7 +197,7 @@ def offers():
                 "lift": int(floor) > 3 if floor.isdigit() else None,
                 "extras": random.sample(["balkon", "piwnica", "oddzielna kuchnia", "garaż/miejsce parkingowe"], 2),
                 "equipment": random.sample(["lodówka", "pralka", "zmywarka", "kuchenka", "meble", "telewizor"], 4),
-                "photos": photos, "plan": floor_plan(rooms),
+                "photos": photos,
             },
             "isNew": new, "approximate": approx, "title": title,
             "link": f"https://example.com/oferta/{66000000 + i * 137}", "lat": lat, "lng": lng,

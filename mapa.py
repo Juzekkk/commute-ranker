@@ -314,7 +314,25 @@ TEMPLATE = r"""<!doctype html>
     box-shadow: 0 1px 3px rgb(0 0 0 / .3);
   }
   .poi svg, .near-icon svg { width: 15px; height: 15px; }
-  .trips, .details, .nearby { margin: 10px 0 2px; padding-top: 10px; border-top: 1px solid var(--rule); }
+  .trips, .details, .nearby { margin: 10px 0 2px; padding-top: 8px; border-top: 1px solid var(--rule); }
+  .section-head {
+    all: unset;
+    box-sizing: border-box;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .section-head:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+  .section-head svg { flex: none; width: 18px; height: 18px; color: var(--muted); transition: transform .15s; }
+  .section-head[aria-expanded="false"] svg { transform: rotate(-90deg); }
+  .section-head .section-note { margin-left: 2px; }
+  .section-body { margin-top: 6px; }
+  .section-body[hidden] { display: none; }
   .section-note { margin-left: 6px; font-size: 13px; font-weight: 400; color: var(--muted); }
   .trip + .trip { margin-top: 10px; }
   .trip-place { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 2px; }
@@ -358,7 +376,6 @@ TEMPLATE = r"""<!doctype html>
   .steps li { display: grid; grid-template-columns: 52px 1fr; column-gap: 8px; align-items: start; }
   .step-mark { justify-self: start; }
   .step-detail { display: block; color: var(--muted); }
-  .section-title { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
   .gallery { position: relative; aspect-ratio: 4 / 3; margin-bottom: 8px; overflow: hidden; border-radius: 6px; background: var(--rule); }
   .gallery img { display: block; width: 100%; height: 100%; object-fit: cover; }
   .gallery-prev, .gallery-next { position: absolute; top: 0; bottom: 0; width: 50%; padding: 0; border: 0; background: none; cursor: pointer; }
@@ -396,10 +413,6 @@ TEMPLATE = r"""<!doctype html>
     font-size: 12px;
     pointer-events: none;
   }
-  .plan { margin-bottom: 8px; }
-  .plan-title { margin: 0 0 4px; font-size: 13px; color: var(--muted); }
-  .plan-frame { display: block; aspect-ratio: 4 / 3; overflow: hidden; border: 1px solid var(--rule); border-radius: 6px; background: #fff; }
-  .plan-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
   .facts-list { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; font-size: 13.5px; }
   .facts-list dt { color: var(--muted); }
   .facts-list dd { margin: 0; }
@@ -446,7 +459,7 @@ TEMPLATE = r"""<!doctype html>
     .gallery-prev::after, .gallery-next::after { opacity: .85; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .collapse svg, .gallery-prev::after, .gallery-next::after { transition: none; }
+    .collapse svg, .section-head svg, .gallery-prev::after, .gallery-next::after { transition: none; }
   }
   @media (max-width: 760px) {
     .resizer { display: none; }
@@ -541,6 +554,31 @@ function loadSelected() {
 }
 function saveSelected() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...selected])); } catch { /* zapis niedostępny */ }
+}
+// Sekcje rozwiniętej oferty zwijają się osobno; ustawienie jest wspólne dla wszystkich ofert i zapamiętane
+const SECTIONS_KEY = "mieszkania-wedlug-dojazdu:sekcje";
+const sectionOpen = { details: true, trips: false, nearby: false };
+try { Object.assign(sectionOpen, JSON.parse(localStorage.getItem(SECTIONS_KEY)) || {}); } catch { /* odczyt niedostępny */ }
+function collapsible(section, key, title, note) {  // zwraca ciało sekcji, do którego trafia zawartość
+  const head = el("button", "section-head");
+  head.type = "button";
+  head.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS.chevron}</svg>`;
+  head.append(el("span", null, title));
+  if (note) head.append(el("span", "section-note", note));
+  const body = el("div", "section-body");
+  const apply = () => {
+    head.setAttribute("aria-expanded", String(sectionOpen[key]));
+    body.hidden = !sectionOpen[key];
+  };
+  head.addEventListener("click", () => {
+    sectionOpen[key] = !sectionOpen[key];
+    try { localStorage.setItem(SECTIONS_KEY, JSON.stringify(sectionOpen)); } catch { /* zapis niedostępny */ }
+    apply();
+  });
+  apply();
+  section.append(head, body);
+  return body;
 }
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -912,9 +950,7 @@ function stepsList(route) {
 
 function routesSection(offer) {
   const section = el("section", "trips");
-  const title = el("p", "section-title", "Dojazdy");
-  title.append(el("span", "section-note", "przyjazd we wtorek na 9:00"));
-  section.append(title);
+  const body = collapsible(section, "trips", "Dojazdy", "przyjazd we wtorek na 9:00");
   data.places.forEach((place, placeIndex) => {
     const trip = el("div", "trip");
     const name = el("span", "line", place.name);
@@ -926,7 +962,7 @@ function routesSection(offer) {
     if (!routes || !routes.length) {
       trip.append(el("p", "trip-empty", routes ? "Google nie znalazł połączenia komunikacją."
         : "Tras jeszcze nie pobrano. Uruchom ponownie dojazdy.py."));
-      section.append(trip);
+      body.append(trip);
       return;
     }
     const list = el("ul", "variants");
@@ -980,7 +1016,7 @@ function routesSection(offer) {
       header.append(more);
     }
     trip.append(list);
-    section.append(trip);
+    body.append(trip);
   });
   updatePins(section);
   return section;
@@ -1036,29 +1072,12 @@ function gallery(photos) {
   return box;
 }
 
-function planPanel(url) {
-  const box = el("div", "plan");
-  box.append(el("p", "plan-title", "Rzut"));
-  const frame = link("", url);
-  frame.className = "plan-frame";
-  frame.setAttribute("aria-label", "Rzut mieszkania, otwórz w nowej karcie");
-  const image = el("img");
-  image.alt = "Rzut mieszkania";
-  image.referrerPolicy = "no-referrer";
-  image.addEventListener("error", () => frame.replaceWith(link("Otwórz rzut mieszkania", url)));  // np. PDF
-  image.src = url;
-  frame.append(image);
-  box.append(frame);
-  return box;
-}
-
 function detailsSection(offer) {
   const section = el("section", "details");
-  section.append(el("p", "section-title", "Szczegóły"));
+  const body = collapsible(section, "details", "Szczegóły");
   const details = offer.details || {};  // brak, gdy karty ogłoszenia nie udało się pobrać
   const photos = details.photos?.length ? details.photos : offer.photo ? [offer.photo] : [];
-  if (photos.length) section.append(gallery(photos));
-  if (details.plan) section.append(planPanel(details.plan));
+  if (photos.length) body.append(gallery(photos));
   const rows = [
     ["Piętro", floorText(offer, details)],
     ["Stan", details.status],
@@ -1074,14 +1093,14 @@ function detailsSection(offer) {
   ].filter(([, value]) => value);
   const list = el("dl", "facts-list");
   for (const [label, value] of rows) list.append(el("dt", null, label), el("dd", null, value));
-  section.append(list);
+  body.append(list);
   const extras = (details.extras || []).filter(extra => !(extra === "winda" && details.lift != null));
   if (extras.length) {
     const chips = el("div", "chips");
     for (const extra of extras) chips.append(el("span", "chip", extra));
-    section.append(chips);
+    body.append(chips);
   }
-  if (offer.excerpt) section.append(el("p", "excerpt", offer.excerpt));
+  if (offer.excerpt) body.append(el("p", "excerpt", offer.excerpt));
   return section;
 }
 
@@ -1116,9 +1135,9 @@ function focusPlace(place) {
 function nearbySection(offer) {
   const section = el("section", "nearby");
   section.setAttribute("aria-live", "polite");
-  section.append(el("p", "section-title", "Okolica"));
+  const body = collapsible(section, "nearby", "Okolica");
   if (!nearbyData) {
-    section.append(el("p", "nearby-status",
+    body.append(el("p", "nearby-status",
       "Brak danych o okolicy. Uruchom python okolica.py, a potem python mapa.py."));
     return section;
   }
@@ -1138,13 +1157,13 @@ function nearbySection(offer) {
     item.append(row);
     list.append(item);
   }
-  section.append(list);
-  if (missing.length) section.append(el("p", "nearby-note", `Nie znaleziono w okolicy: ${missing.join(", ")}.`));
+  body.append(list);
+  if (missing.length) body.append(el("p", "nearby-note", `Nie znaleziono w okolicy: ${missing.join(", ")}.`));
   const note = el("p", "nearby-note",
     "Promień 1 km, dla metra i kolei 2 km. Odległości w linii prostej, czas pieszo orientacyjny. Dane: ");
   note.append(link("OpenStreetMap", "https://www.openstreetmap.org/copyright"),
               document.createTextNode(`, stan z ${nearbyData.generated.split("-").reverse().join(".")}.`));
-  section.append(note);
+  body.append(note);
   return section;
 }
 
