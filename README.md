@@ -1,4 +1,4 @@
-# commute-ranker
+# otodom-commute-ranker
 
 Ranking ofert mieszkań z Otodom według łącznego czasu, który co tydzień spędzisz w komunikacji miejskiej, jeżdżąc do swoich miejsc: pracy, uczelni, rodziców, na siłownię. Cena i metraż mówią, ile płacisz za mieszkanie. Ten ranking pokazuje, ile czasu będzie Cię kosztowało mieszkanie w tym miejscu.
 
@@ -28,8 +28,8 @@ Projekt jest ustawiony pod Warszawę. W innym mieście wystarczy zmienić adres 
 Wymagania: Python 3.11 lub nowszy, [uv](https://docs.astral.sh/uv/) (albo zwykły `venv` i `pip`) oraz klucz Google Maps Platform z włączonym Routes API ([jak go zdobyć](#klucz-google)).
 
 ```bash
-git clone https://github.com/Juzekkk/commute-ranker.git
-cd commute-ranker
+git clone https://github.com/Juzekkk/otodom-commute-ranker.git
+cd otodom-commute-ranker
 
 # środowisko i biblioteki: requests, tzdata, osmium
 uv venv -p 3.11
